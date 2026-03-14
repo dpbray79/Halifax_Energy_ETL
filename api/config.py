@@ -24,11 +24,10 @@ class Settings(BaseSettings):
     api_reload: bool = Field(default=True, alias="API_RELOAD")
 
     # ── Database ──────────────────────────────────────────────────────────────
+    # Uses Supabase PostgreSQL — set DATABASE_URL in environment/Vercel settings
+    # Format: postgresql://postgres.[project]:[password]@[host]:6543/postgres
     database_url: str = Field(
-        default=(
-            "mssql+pyodbc://sa:Halifax@Energy2026!@localhost:1433/HalifaxEnergyProject"
-            "?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
-        ),
+        default="postgresql+psycopg2://postgres:password@localhost:5432/halifaxenergy",
         alias="DATABASE_URL"
     )
 

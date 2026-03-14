@@ -15,7 +15,7 @@ python-multipart>=0.0.6
 
 # ── Database ──────────────────────────────────────────────────────────────────
 SQLAlchemy>=2.0.0,<3.0.0
-pyodbc>=5.0.0
+psycopg2-binary>=2.9.0   # PostgreSQL driver (replaces pyodbc/SQL Server)
 
 # ── Data Processing ───────────────────────────────────────────────────────────
 pandas>=2.0.0
