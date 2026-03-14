@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Halifax Energy Demand Forecasting — ERD v1.0</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:   #0D2E4A;
+    --teal:   #0A5C52;
+    --purple: #3B3181;
+    --amber:  #6B3A06;
+    --rose:   #5D1A30;
+    --slate:  #2C3240;
+    --bg:     #F4F2EC;
+    --bg2:    #FFFFFF;
+    --border: #D6D2C6;
+    --text:   #1A1916;
+    --muted:  #5A574E;
+    --pk-bg:  #F5C518;
+    --pk-text:#1A1916;
+    --fk-bg:  #C05620;
+    --fk-text:#FFFFFF;
+  }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 32px 24px;
+  }
+
+  /* ─── PAGE HEADER ─────────────────────────────────── */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 28px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--navy);
+  }
+  .page-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .page-main-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--navy);
+    margin-top: 4px;
+    letter-spacing: -0.01em;
+  }
+  .page-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.7;
+  }
+
+  /* ─── LEGEND ──────────────────────────────────────── */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin-bottom: 24px;
+    padding: 12px 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 11px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .badge-pk { background: var(--pk-bg); color: var(--pk-text); font-family: 'IBM Plex Mono', monospace; font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; }
+  .badge-fk { background: var(--fk-bg); color: var(--fk-text); font-family: 'IBM Plex Mono', monospace; font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; }
+
+  /* ─── GRID LAYOUT ─────────────────────────────────── */
+  .erd-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 12px;
+  }
+
+  .row-staging    { display: contents; }
+  .row-core       { display: contents; }
+  .row-support    { display: contents; }
+
+  /* ─── ENTITY CARD ─────────────────────────────────── */
+  .entity {
+    border-radius: 7px;
+    overflow: hidden;
+    border: 1.5px solid;
+    font-size: 11px;
+  }
+  .entity-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: -0.01em;
+  }
+  .entity-star {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.25);
+    letter-spacing: 0.04em;
+  }
+  .entity-body { padding: 10px 12px; }
+  .field-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2.5px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    line-height: 1.4;
+  }
+  .field-row:last-child { border-bottom: none; }
+  .field-badge { flex-shrink: 0; width: 22px; }
+  .field-name { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; min-width: 140px; }
+  .field-type { font-size: 10px; opacity: 0.7; }
+
+  /* Navy — Fact table */
+  .e-navy { border-color: #185FA5; }
+  .e-navy .entity-head { background: #0D2E4A; color: #B5D4F4; }
+  .e-navy .entity-body { background: #EBF4FC; }
+  .e-navy .field-name  { color: #0C3A6B; }
+  .e-navy .field-type  { color: #185FA5; }
+  .e-navy .field-row   { border-color: rgba(24,95,165,0.1); }
+
+  /* Purple — Dim_Date */
+  .e-purple { border-color: #534AB7; }
+  .e-purple .entity-head { background: #26215C; color: #CECBF6; }
+  .e-purple .entity-body { background: #F0EFFE; }
+  .e-purple .field-name  { color: #2D2770; }
+  .e-purple .field-type  { color: #534AB7; }
+  .e-purple .field-row   { border-color: rgba(83,74,183,0.1); }
+
+  /* Gray — Model_Predictions */
+  .e-gray { border-color: #888780; }
+  .e-gray .entity-head { background: #2C2C2A; color: #D3D1C7; }
+  .e-gray .entity-body { background: #F5F3EE; }
+  .e-gray .field-name  { color: #2C2C2A; }
+  .e-gray .field-type  { color: #5F5E5A; }
+  .e-gray .field-row   { border-color: rgba(100,98,94,0.1); }
+
+  /* Teal — Staging */
+  .e-teal { border-color: #0F6E56; }
+  .e-teal .entity-head { background: #053D2F; color: #9FE1CB; }
+  .e-teal .entity-body { background: #E6F7F2; }
+  .e-teal .field-name  { color: #064433; }
+  .e-teal .field-type  { color: #0F6E56; }
+  .e-teal .field-row   { border-color: rgba(15,110,86,0.1); }
+
+  /* Amber — Geo */
+  .e-amber { border-color: #BA7517; }
+  .e-amber .entity-head { background: #4A2400; color: #FAC775; }
+  .e-amber .entity-body { background: #FDF4E6; }
+  .e-amber .field-name  { color: #4A2400; }
+  .e-amber .field-type  { color: #854F0B; }
+  .e-amber .field-row   { border-color: rgba(186,117,23,0.1); }
+
+  /* Rose — ETL */
+  .e-rose { border-color: #993556; }
+  .e-rose .entity-head { background: #3D0B1D; color: #F4C0D1; }
+  .e-rose .entity-body { background: #FCF0F4; }
+  .e-rose .field-name  { color: #3D0B1D; }
+  .e-rose .field-type  { color: #72243E; }
+  .e-rose .field-row   { border-color: rgba(153,53,86,0.1); }
+
+  /* ─── GRID SPANS ──────────────────────────────────── */
+  .col-left   { grid-column: 1; }
+  .col-center { grid-column: 2; }
+  .col-right  { grid-column: 3; }
+  .span-all   { grid-column: 1 / -1; }
+
+  /* ─── RELATIONSHIP TABLE ──────────────────────────── */
+  .rel-section {
+    grid-column: 1 / -1;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    overflow: hidden;
+  }
+  .rel-head {
+    background: var(--slate);
+    color: #C8CDD8;
+    padding: 8px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  table.rel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .rel-table th {
+    background: #EDEAE2;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .rel-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    color: var(--text);
+  }
+  .rel-table tr:last-child td { border-bottom: none; }
+  .rel-table tr:nth-child(even) td { background: #FAF8F4; }
+  .e-chip {
+    display: inline-block;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .cardinality {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* ─── 3NF NOTE ────────────────────────────────────── */
+  .nf-note {
+    grid-column: 1 / -1;
+    background: #EBF4FC;
+    border: 1px solid #B5D4F4;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: #0C3A6B;
+    line-height: 1.6;
+  }
+  .nf-note strong { font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Entity Relationship Diagram · 3NF Compliant</div>
+    <div class="page-main-title">Halifax Area Energy Demand Forecasting</div>
+  </div>
+  <div class="page-meta">
+    Creator: Dylan Bray<br>
+    Course: NSCC DBAS 3090<br>
+    Version: 1.0 · March 2026<br>
+    DB: HalifaxEnergyProject · SQL Server
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="swatch" style="background:#0D2E4A"></div> Fact table (gold)</div>
+  <div class="legend-item"><div class="swatch" style="background:#26215C"></div> Dimension table</div>
+  <div class="legend-item"><div class="swatch" style="background:#053D2F"></div> Staging tables</div>
+  <div class="legend-item"><div class="swatch" style="background:#2C2C2A"></div> Model output</div>
+  <div class="legend-item"><div class="swatch" style="background:#4A2400"></div> Geospatial</div>
+  <div class="legend-item"><div class="swatch" style="background:#3D0B1D"></div> ETL control</div>
+  <div class="legend-item"><span class="badge-pk">PK</span> Primary key</div>
+  <div class="legend-item"><span class="badge-fk">FK</span> Foreign key</div>
+  <div class="legend-item" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted)">||──o{  one-to-many &nbsp;&nbsp; }o──||  many-to-one</div>
+</div>
+
+<div class="erd-grid">
+
+  <!-- ── ROW 1: Staging tables ── -->
+  <div class="entity e-teal col-left">
+    <div class="entity-head">stg_NSP_Load <span class="entity-star">STAGING</span></div>
+    <div class="entity-body">
+      <div class="field-row"><span class="field-badge"><span class="badge-pk">PK</span></span><span class="field-name">LoadID</span><span class="field-type">INT IDENTITY(1,1)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">DateTime</span><span class="field-type">DATETIME NOT NULL</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Load_MW</span><span class="field-type">FLOAT 500–2500</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Source</span><span class="field-type">VARCHAR(30)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">InsertedAt</span><span class="field-type">DATETIME DEF GETDATE()</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">IsProcessed</span><span class="field-type">BIT DEF 0</span></div>
+    </div>
+  </div>
+
+  <div class="entity e-purple col-center">
+    <div class="entity-head">Dim_Date <span class="entity-star">DIMENSION</span></div>
+    <div class="entity-body">
+      <div class="field-row"><span class="field-badge"><span class="badge-pk">PK</span></span><span class="field-name">DateID</span><span class="field-type">INT IDENTITY(1,1)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">DateTime</span><span class="field-type">DATETIME UNIQUE NOT NULL</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Hour</span><span class="field-type">INT 0–23</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">DayOfWeek</span><span class="field-type">INT 1–7</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Month</span><span class="field-type">INT 1–12</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Year</span><span class="field-type">INT</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Is_Holiday</span><span class="field-type">BIT DEF 0</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">HolidayName</span><span class="field-type">VARCHAR(60) NULL</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Season</span><span class="field-type">VARCHAR(20)</span></div>
+    </div>
+  </div>
+
+  <div class="entity e-teal col-right">
+    <div class="entity-head">stg_Weather <span class="entity-star">STAGING</span></div>
+    <div class="entity-body">
+      <div class="field-row"><span class="field-badge"><span class="badge-pk">PK</span></span><span class="field-name">WeatherID</span><span class="field-type">INT IDENTITY(1,1)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">DateTime</span><span class="field-type">DATETIME NOT NULL</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Temp_C</span><span class="field-type">FLOAT -40–40</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">WindSpeed_kmh</span><span class="field-type">FLOAT 0–150</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Precip_mm</span><span class="field-type">FLOAT ≥0</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Humidity_Pct</span><span class="field-type">FLOAT 0–100</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">InsertedAt</span><span class="field-type">DATETIME DEF GETDATE()</span></div>
+    </div>
+  </div>
+
+  <!-- ── ROW 2: Core tables ── -->
+  <div class="entity e-rose col-left">
+    <div class="entity-head">ETL_Watermark <span class="entity-star">CONTROL</span></div>
+    <div class="entity-body">
+      <div class="field-row"><span class="field-badge"><span class="badge-pk">PK</span></span><span class="field-name">WatermarkID</span><span class="field-type">INT IDENTITY(1,1)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">SourceName</span><span class="field-type">VARCHAR(60) UNIQUE</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">LastExtracted</span><span class="field-type">DATETIME NOT NULL</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">RowsInserted</span><span class="field-type">INT DEF 0</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Status</span><span class="field-type">VARCHAR(20) DEF 'OK'</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">UpdatedAt</span><span class="field-type">DATETIME DEF GETDATE()</span></div>
+    </div>
+  </div>
+
+  <div class="entity e-navy col-center">
+    <div class="entity-head">Fact_Energy_Weather <span class="entity-star">★ GOLD TABLE</span></div>
+    <div class="entity-body">
+      <div class="field-row"><span class="field-badge"><span class="badge-pk">PK</span></span><span class="field-name">FactID</span><span class="field-type">INT IDENTITY(1,1)</span></div>
+      <div class="field-row"><span class="field-badge"><span class="badge-fk">FK</span></span><span class="field-name">DateID</span><span class="field-type">INT → Dim_Date</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">DateTime</span><span class="field-type">DATETIME NOT NULL</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Load_MW</span><span class="field-type">FLOAT 500–2500  ← TARGET</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Temp_C</span><span class="field-type">FLOAT -40–40</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">WindSpeed_kmh</span><span class="field-type">FLOAT 0–150</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Precip_mm</span><span class="field-type">FLOAT ≥0</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">HDD_Flag</span><span class="field-type">BIT  (Temp_C &lt; 18°C)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">CDD_Flag</span><span class="field-type">BIT  (Temp_C &gt; 22°C)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Lag_Load_24h</span><span class="field-type">FLOAT MW  top XGBoost feat</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Lag_Load_168h</span><span class="field-type">FLOAT MW</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">WindChill</span><span class="field-type">FLOAT  derived Temp×Wind</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">CommercialAreaPct</span><span class="field-type">FLOAT 0–1</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">IndustrialAreaPct</span><span class="field-type">FLOAT 0–1</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Is_Holiday</span><span class="field-type">BIT DEF 0</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Hour</span><span class="field-type">INT 0–23</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">DayOfWeek</span><span class="field-type">INT 1–7</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Month</span><span class="field-type">INT 1–12</span></div>
+    </div>
+  </div>
+
+  <div class="entity e-gray col-right">
+    <div class="entity-head">Model_Predictions</div>
+    <div class="entity-body">
+      <div class="field-row"><span class="field-badge"><span class="badge-pk">PK</span></span><span class="field-name">PredID</span><span class="field-type">INT IDENTITY(1,1)</span></div>
+      <div class="field-row"><span class="field-badge"><span class="badge-fk">FK</span></span><span class="field-name">DateID</span><span class="field-type">INT → Dim_Date</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">DateTime</span><span class="field-type">DATETIME NOT NULL</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Predicted_Load_MW</span><span class="field-type">FLOAT 500–2500</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Run_RMSE</span><span class="field-type">FLOAT MW ≥0</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Run_SI_Pct</span><span class="field-type">FLOAT 0–1</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">ForecastHorizon</span><span class="field-type">VARCHAR(10) H1/H2/H3</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">ModelVersion</span><span class="field-type">VARCHAR(20)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">ModelRunAt</span><span class="field-type">DATETIME DEF GETDATE()</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">IsBackTest</span><span class="field-type">BIT DEF 0</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Residual_MW</span><span class="field-type">FLOAT  Actual − Predicted</span></div>
+    </div>
+  </div>
+
+  <!-- ── ROW 3: Geo tables ── -->
+  <div class="entity e-amber col-left">
+    <div class="entity-head">Geo_LandUse <span class="entity-star">GEO</span></div>
+    <div class="entity-body">
+      <div class="field-row"><span class="field-badge"><span class="badge-pk">PK</span></span><span class="field-name">ZoneID</span><span class="field-type">INT IDENTITY(1,1)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">ZoneCode</span><span class="field-type">VARCHAR(20) UNIQUE</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">ZoneCategory</span><span class="field-type">VARCHAR(40)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">CommercialPct</span><span class="field-type">FLOAT 0–1</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">IndustrialPct</span><span class="field-type">FLOAT 0–1</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">AreaSqKm</span><span class="field-type">FLOAT</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Lat</span><span class="field-type">FLOAT</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Lon</span><span class="field-type">FLOAT</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">GeoJSON</span><span class="field-type">TEXT</span></div>
+    </div>
+  </div>
+
+  <div class="entity e-amber col-center">
+    <div class="entity-head">Geo_EnergyByZone <span class="entity-star">GEO</span></div>
+    <div class="entity-body">
+      <div class="field-row"><span class="field-badge"><span class="badge-pk">PK</span></span><span class="field-name">ZoneHourID</span><span class="field-type">INT IDENTITY(1,1)</span></div>
+      <div class="field-row"><span class="field-badge"><span class="badge-fk">FK</span></span><span class="field-name">ZoneID</span><span class="field-type">INT → Geo_LandUse</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">DateTime</span><span class="field-type">DATETIME NOT NULL</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Estimated_Load_MW</span><span class="field-type">FLOAT</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">PopWeight</span><span class="field-type">FLOAT 0–1</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">CommWeight</span><span class="field-type">FLOAT 0–1</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">ComputedAt</span><span class="field-type">DATETIME DEF GETDATE()</span></div>
+    </div>
+  </div>
+
+  <div class="entity e-amber col-right">
+    <div class="entity-head">Geo_Population <span class="entity-star">GEO</span></div>
+    <div class="entity-body">
+      <div class="field-row"><span class="field-badge"><span class="badge-pk">PK</span></span><span class="field-name">AreaID</span><span class="field-type">INT IDENTITY(1,1)</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">DA_Code</span><span class="field-type">VARCHAR(10) UNIQUE</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">PopDensity</span><span class="field-type">FLOAT per km²</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Lat</span><span class="field-type">FLOAT</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">Lon</span><span class="field-type">FLOAT</span></div>
+      <div class="field-row"><span class="field-badge"></span><span class="field-name">CensusYear</span><span class="field-type">INT DEF 2021</span></div>
+    </div>
+  </div>
+
+  <!-- ── Relationships ── -->
+  <div class="rel-section">
+    <div class="rel-head">Relationships · Crow's Foot Notation · 3NF</div>
+    <table class="rel-table">
+      <tr>
+        <th>Parent Entity</th>
+        <th>Cardinality</th>
+        <th>Child Entity</th>
+        <th>Join Key</th>
+        <th>Description</th>
+      </tr>
+      <tr>
+        <td><span class="e-chip" style="background:#F0EFFE;color:#26215C">Dim_Date</span></td>
+        <td class="cardinality">1 ──o{</td>
+        <td><span class="e-chip" style="background:#EBF4FC;color:#0D2E4A">Fact_Energy_Weather</span></td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:10px">DateID FK</td>
+        <td>One date row to many hourly fact records</td>
+      </tr>
+      <tr>
+        <td><span class="e-chip" style="background:#F0EFFE;color:#26215C">Dim_Date</span></td>
+        <td class="cardinality">1 ──o{</td>
+        <td><span class="e-chip" style="background:#F5F3EE;color:#2C2C2A">Model_Predictions</span></td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:10px">DateID FK</td>
+        <td>One date row to many prediction records</td>
+      </tr>
+      <tr>
+        <td><span class="e-chip" style="background:#E6F7F2;color:#053D2F">stg_NSP_Load</span></td>
+        <td class="cardinality">}o──1</td>
+        <td><span class="e-chip" style="background:#EBF4FC;color:#0D2E4A">Fact_Energy_Weather</span></td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:10px">DateTime merge</td>
+        <td>Many staging rows merged to one fact row via SSIS on DateTime match</td>
+      </tr>
+      <tr>
+        <td><span class="e-chip" style="background:#E6F7F2;color:#053D2F">stg_Weather</span></td>
+        <td class="cardinality">}o──1</td>
+        <td><span class="e-chip" style="background:#EBF4FC;color:#0D2E4A">Fact_Energy_Weather</span></td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:10px">DateTime merge</td>
+        <td>Many staging rows merged to one fact row via SSIS on DateTime match</td>
+      </tr>
+      <tr>
+        <td><span class="e-chip" style="background:#EBF4FC;color:#0D2E4A">Fact_Energy_Weather</span></td>
+        <td class="cardinality">1 ──o{</td>
+        <td><span class="e-chip" style="background:#F5F3EE;color:#2C2C2A">Model_Predictions</span></td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:10px">DateTime ref</td>
+        <td>One fact row generates multiple horizon predictions (H1/H2/H3)</td>
+      </tr>
+      <tr>
+        <td><span class="e-chip" style="background:#FDF4E6;color:#4A2400">Geo_LandUse</span></td>
+        <td class="cardinality">1 ──o{</td>
+        <td><span class="e-chip" style="background:#FDF4E6;color:#4A2400">Geo_EnergyByZone</span></td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:10px">ZoneID FK</td>
+        <td>One zone to many hourly estimated load records</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ── 3NF note ── -->
+  <div class="nf-note">
+    <strong>3NF Compliance:</strong>
+    All non-key attributes depend solely on the primary key of their entity (no transitive dependencies).
+    Dim_Date eliminates temporal repetition from Fact_Energy_Weather — Hour, DayOfWeek, Month, Is_Holiday are stored once per timestamp.
+    Geo_LandUse eliminates zone attribute repetition from Geo_EnergyByZone.
+    Staging tables are excluded from 3NF scope per convention (raw ingest layer, not analytics layer).
+    ETL_Watermark is a control table with no FK dependencies by design.
+  </div>
+
+</div><!-- end .erd-grid -->
+
+</body>
+</html>

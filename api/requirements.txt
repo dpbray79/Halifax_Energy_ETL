@@ -1,0 +1,51 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Halifax Energy Forecasting API — Python Dependencies
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Install with: pip install -r requirements.txt
+#
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── FastAPI & Web Framework ──────────────────────────────────────────────────
+fastapi[all]>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-multipart>=0.0.6
+
+# ── Database ──────────────────────────────────────────────────────────────────
+SQLAlchemy>=2.0.0,<3.0.0
+pyodbc>=5.0.0
+
+# ── Data Processing ───────────────────────────────────────────────────────────
+pandas>=2.0.0
+numpy>=1.24.0
+
+# ── HTTP & API Clients ────────────────────────────────────────────────────────
+requests>=2.31.0
+httpx>=0.25.0
+
+# ── Web Scraping (for HTML table parsing) ────────────────────────────────────
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+html5lib>=1.1
+
+# ── Scheduling ────────────────────────────────────────────────────────────────
+APScheduler>=3.10.0
+
+# ── WebSocket Support ─────────────────────────────────────────────────────────
+websockets>=12.0
+
+# ── Environment & Configuration ───────────────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── Date/Time ─────────────────────────────────────────────────────────────────
+python-dateutil>=2.8.2
+pytz>=2023.3
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NOTES:
+# - This requirements.txt is for the API only
+# - For data extraction scripts, see ../requirements.txt in project root
+# - ODBC Driver 17 for SQL Server must be installed separately
+# ══════════════════════════════════════════════════════════════════════════════

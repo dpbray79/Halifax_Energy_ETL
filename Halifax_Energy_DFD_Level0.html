@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Halifax Energy — Level 0 DFD Context Diagram</title>
+<style>
+  body { margin: 0; background: #F4F2EC; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; }
+  .wrap { background: #fff; border-radius: 10px; box-shadow: 0 2px 16px rgba(0,0,0,0.10); padding: 28px 32px; max-width: 760px; width: 100%; }
+  .header { font-size: 11px; color: #888; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 4px; }
+  .title  { font-size: 18px; font-weight: 600; color: #0D2E4A; margin-bottom: 20px; }
+  svg text { font-family: sans-serif; }
+  .footer { font-size: 10px; color: #aaa; text-align: center; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">Data Flow Diagram · Level 0 · Context Diagram</div>
+  <div class="title">Halifax Area Energy Demand Forecasting System</div>
+
+<svg width="100%" viewBox="0 0 680 490" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<!-- External Entity: NS Power / CCEI (top-left) -->
+<rect x="18" y="32" width="160" height="66" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="1.2"/>
+<text font-size="13" font-weight="600" fill="#085041" x="98" y="56" text-anchor="middle">NS Power / CCEI</text>
+<text font-size="11" fill="#0F6E56" x="98" y="74" text-anchor="middle">HFED API</text>
+
+<!-- External Entity: Environment Canada (top-right) -->
+<rect x="502" y="32" width="160" height="66" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="1.2"/>
+<text font-size="13" font-weight="600" fill="#085041" x="582" y="52" text-anchor="middle">Environment</text>
+<text font-size="13" font-weight="600" fill="#085041" x="582" y="68" text-anchor="middle">Canada</text>
+<text font-size="11" fill="#0F6E56" x="582" y="85" text-anchor="middle">Geomet OGC API</text>
+
+<!-- External Entity: SQL Server Agent (bottom-left) -->
+<rect x="18" y="392" width="160" height="66" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="1.2"/>
+<text font-size="13" font-weight="600" fill="#26215C" x="98" y="416" text-anchor="middle">SQL Server</text>
+<text font-size="13" font-weight="600" fill="#26215C" x="98" y="432" text-anchor="middle">Agent</text>
+<text font-size="11" fill="#534AB7" x="98" y="450" text-anchor="middle">Daily · 06:00 AM</text>
+
+<!-- External Entity: Power BI Users (bottom-right) -->
+<rect x="502" y="392" width="160" height="66" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="1.2"/>
+<text font-size="13" font-weight="600" fill="#26215C" x="582" y="416" text-anchor="middle">Power BI</text>
+<text font-size="13" font-weight="600" fill="#26215C" x="582" y="432" text-anchor="middle">Users</text>
+<text font-size="11" fill="#534AB7" x="582" y="450" text-anchor="middle">Grid operators</text>
+
+<!-- Central Process: ellipse -->
+<ellipse cx="340" cy="228" rx="152" ry="80" fill="#E6F1FB" stroke="#185FA5" stroke-width="1.8"/>
+<text font-size="13" font-weight="600" fill="#0C447C" x="340" y="206" text-anchor="middle">1.0</text>
+<text font-size="13" font-weight="600" fill="#0C447C" x="340" y="224" text-anchor="middle">Halifax Energy Demand</text>
+<text font-size="13" font-weight="600" fill="#0C447C" x="340" y="242" text-anchor="middle">Forecasting System</text>
+<text font-size="10" fill="#378ADD" x="340" y="260" text-anchor="middle">SQL Server · SSIS · XGBoost · Power BI</text>
+
+<!-- Arrow: NS Power → System -->
+<line x1="178" y1="65" x2="272" y2="163" stroke="#0F6E56" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text font-size="10" fill="#0F6E56" x="190" y="105" text-anchor="start">Load data (CSV / API)</text>
+
+<!-- Arrow: Env Canada → System -->
+<line x1="502" y1="65" x2="408" y2="163" stroke="#0F6E56" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text font-size="10" fill="#0F6E56" x="410" y="105" text-anchor="start">Hourly weather data</text>
+
+<!-- Arrow: SQL Agent → System -->
+<line x1="178" y1="425" x2="280" y2="300" stroke="#534AB7" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text font-size="10" fill="#534AB7" x="22" y="364" text-anchor="start">Daily schedule trigger</text>
+
+<!-- Arrow: System → Power BI Users -->
+<line x1="418" y1="300" x2="502" y2="424" stroke="#534AB7" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text font-size="10" fill="#534AB7" x="460" y="360" text-anchor="start">24–48h forecast</text>
+<text font-size="10" fill="#534AB7" x="460" y="374" text-anchor="start">dashboard</text>
+
+<!-- Legend -->
+<rect x="18" y="460" width="644" height="22" rx="4" fill="none"/>
+<text font-size="9" fill="#aaa" x="340" y="478" text-anchor="middle">Dylan Bray · NSCC DBAS 3090 Advanced Database Applications · Level 0 Context Diagram · March 2026</text>
+</svg>
+
+  <div class="footer">Level 0 DFD shows the system as a single process with all external entities and data flows. See Level 1 for process decomposition.</div>
+</div>
+</body>
+</html>

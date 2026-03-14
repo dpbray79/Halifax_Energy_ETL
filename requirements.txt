@@ -1,0 +1,70 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Halifax Energy Demand Forecasting — Python Dependencies
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Install with: pip install -r requirements.txt
+#
+# For development: pip install -r requirements.txt -r requirements-dev.txt
+#
+# UPDATED FOR SUPABASE POSTGRESQL (Cloud Deployment)
+#
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Database (PostgreSQL for Supabase) ───────────────────────────────────────
+SQLAlchemy>=2.0.0,<3.0.0
+psycopg2-binary>=2.9.9  # PostgreSQL adapter (replaces pyodbc)
+
+# ── Data Processing ───────────────────────────────────────────────────────────
+pandas>=2.0.0
+numpy>=1.24.0
+
+# ── HTTP & API ────────────────────────────────────────────────────────────────
+requests>=2.31.0
+urllib3>=2.0.0
+
+# ── Web Scraping (for HTML table parsing) ────────────────────────────────────
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+html5lib>=1.1
+
+# ── FastAPI Backend (api/ folder) ────────────────────────────────────────────
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-multipart>=0.0.6
+
+# ── Scheduling & Background Tasks ────────────────────────────────────────────
+APScheduler>=3.10.0
+
+# ── WebSocket Support ─────────────────────────────────────────────────────────
+websockets>=12.0
+
+# ── Environment & Configuration ───────────────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── Logging & Monitoring ──────────────────────────────────────────────────────
+python-json-logger>=2.0.0
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+# (Included in FastAPI, but listed for clarity)
+# starlette (FastAPI dependency handles this)
+
+# ── Date/Time Utilities ───────────────────────────────────────────────────────
+pytz>=2023.3
+python-dateutil>=2.8.2
+
+# ── Optional: Data Validation ─────────────────────────────────────────────────
+marshmallow>=3.20.0
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NOTES:
+# - Supabase account required (free tier available at https://supabase.com)
+# - PostgreSQL connection uses psycopg2-binary (no additional drivers needed)
+#
+# - R and XGBoost packages required for model (see model/README.md)
+#
+# - All packages are native ARM-compatible (no Rosetta needed on Apple Silicon!)
+#
+# - GitHub Actions can run R model training for free (see .github/workflows/)
+# ══════════════════════════════════════════════════════════════════════════════

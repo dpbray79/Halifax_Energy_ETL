@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv:*)",
+      "Bash(/bin/mkdir:*)",
+      "Bash(/bin/mv:*)",
+      "Bash(chmod:*)",
+      "Bash(python -m venv:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

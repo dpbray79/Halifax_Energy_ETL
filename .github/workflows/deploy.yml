@@ -1,0 +1,115 @@
+name: Deploy to Vercel & Run R Model
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Allow manual triggering
+  schedule:
+    # Run daily at 4:00 AM UTC for model retraining
+    - cron: '0 4 * * *'
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  # ── Deploy Dashboard to Vercel ──────────────────────────────────────────────
+  deploy-dashboard:
+    name: Deploy React Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ./dashboard
+
+      - name: Build Project Artifacts
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ./dashboard
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ./dashboard
+
+  # ── Run R XGBoost Model ─────────────────────────────────────────────────────
+  run-model:
+    name: Train XGBoost Models (H1, H2, H3)
+    runs-on: ubuntu-latest
+    needs: deploy-dashboard
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3.2'
+
+      - name: Install R dependencies
+        run: |
+          R -e 'install.packages(c("tidyverse", "tidymodels", "xgboost", "DBI", "RPostgres", "lubridate", "glue", "here"), repos="https://cloud.r-project.org")'
+
+      - name: Install Python (for pre-processing)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install SQLAlchemy psycopg2-binary pandas python-dotenv
+
+      - name: Run XGBoost Model Training
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: Rscript model/HalifaxEnergy_Model.R
+        working-directory: .
+
+      - name: Upload Model Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-artifacts
+          path: model/model_artifacts/
+          retention-days: 30
+
+  # ── Run Daily Data Extraction ───────────────────────────────────────────────
+  extract-data:
+    name: Extract CCEI HFED & Weather Data
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 6 * * *'  # Only on scheduled runs
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Extract CCEI HFED Load Data
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/nsp_extract.py
+
+      - name: Extract Weather Data
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/weather_extract.py
