@@ -7,6 +7,8 @@ on:
   schedule:
     # Run daily at 4:00 AM UTC for model retraining
     - cron: '0 4 * * *'
+    # Run daily at 6:00 AM UTC for data extraction
+    - cron: '0 6 * * *'
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -50,7 +52,6 @@ jobs:
   run-model:
     name: Train XGBoost Models (H1, H2, H3)
     runs-on: ubuntu-latest
-    needs: deploy-dashboard
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -90,7 +91,8 @@ jobs:
   extract-data:
     name: Extract CCEI HFED & Weather Data
     runs-on: ubuntu-latest
-    if: github.event.schedule == '0 6 * * *'  # Only on scheduled runs
+    # Only run on scheduled events (not on push or manual dispatch)
+    if: github.event_name == 'schedule'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

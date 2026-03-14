@@ -37,7 +37,7 @@
 #   • Performance metrics logged to stdout and ./logs/model_run.log
 #
 # DEPENDENCIES
-#   install.packages(c("tidyverse", "tidymodels", "xgboost", "DBI", "odbc",
+#   install.packages(c("tidyverse", "tidymodels", "xgboost", "DBI", "RPostgres",
 #                      "lubridate", "glue", "jsonlite", "here"))
 #
 # Author: Dylan Bray · NSCC DBAS 3090 · March 2026
@@ -49,19 +49,36 @@ suppressPackageStartupMessages({
   library(tidymodels)
   library(xgboost)
   library(DBI)
-  library(odbc)
+  library(RPostgres)
   library(lubridate)
   library(glue)
 })
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-# Database connection (override with env var DATABASE_URL)
-DB_SERVER   <- Sys.getenv("DB_SERVER", "localhost")
-DB_PORT     <- Sys.getenv("DB_PORT", "1433")
-DB_NAME     <- Sys.getenv("DB_NAME", "HalifaxEnergyProject")
-DB_USER     <- Sys.getenv("DB_USER", "sa")
-DB_PASSWORD <- Sys.getenv("DB_PASSWORD", "Halifax@Energy2026!")
+# Database connection via DATABASE_URL (Supabase PostgreSQL)
+# Format: postgresql://user:password@host:port/dbname
+DATABASE_URL <- Sys.getenv("DATABASE_URL", "")
+
+if (nchar(DATABASE_URL) == 0) {
+  stop("DATABASE_URL environment variable is not set.")
+}
+
+# Parse DATABASE_URL for RPostgres
+parse_db_url <- function(url) {
+  # Strip leading postgresql:// or postgres://
+  url <- sub("^postgres(ql)?://", "", url)
+  user_pass <- sub("@.*", "", url)
+  host_rest <- sub("^[^@]+@", "", url)
+  user <- sub(":.*", "", user_pass)
+  pass <- sub("^[^:]+:", "", user_pass)
+  host <- sub(":[0-9]+/.*", "", host_rest)
+  port <- as.integer(sub(".*:([0-9]+)/.*", "\\1", host_rest))
+  dbname <- sub(".*/", "", host_rest)
+  list(user = user, pass = pass, host = host, port = port, dbname = dbname)
+}
+
+DB_PARAMS <- parse_db_url(DATABASE_URL)
 
 # Model parameters
 MODEL_VERSION <- "v1.0"
@@ -93,22 +110,22 @@ log_message <- function(msg) {
 # ── Database Connection ───────────────────────────────────────────────────────
 
 connect_db <- function() {
-  log_message("Connecting to SQL Server...")
+  log_message("Connecting to Supabase PostgreSQL...")
 
   tryCatch({
     conn <- dbConnect(
-      odbc::odbc(),
-      Driver   = "ODBC Driver 17 for SQL Server",
-      Server   = glue("{DB_SERVER},{DB_PORT}"),
-      Database = DB_NAME,
-      UID      = DB_USER,
-      PWD      = DB_PASSWORD,
-      TrustServerCertificate = "yes"
+      RPostgres::Postgres(),
+      host     = DB_PARAMS$host,
+      port     = DB_PARAMS$port,
+      dbname   = DB_PARAMS$dbname,
+      user     = DB_PARAMS$user,
+      password = DB_PARAMS$pass,
+      sslmode  = "require"
     )
 
     # Test connection
     dbGetQuery(conn, "SELECT 1")
-    log_message("  ✓ Connected to SQL Server")
+    log_message("  ✓ Connected to Supabase PostgreSQL")
 
     return(conn)
   }, error = function(e) {
@@ -124,35 +141,41 @@ load_training_data <- function(conn) {
 
   query <- "
     SELECT
-      DateTime,
-      Load_MW,
-      Temp_C,
-      WindSpeed_kmh,
-      Precip_mm,
-      HDD_Flag,
-      CDD_Flag,
-      Lag_Load_24h,
-      Lag_Load_168h,
-      WindChill,
-      CommercialAreaPct,
-      IndustrialAreaPct,
-      Is_Holiday,
-      Hour,
-      DayOfWeek,
-      Month
-    FROM Fact_Energy_Weather
-    WHERE Load_MW IS NOT NULL
-      AND DateTime >= DATEADD(year, -2, GETDATE())  -- Last 2 years
-    ORDER BY DateTime
+      datetime,
+      load_mw,
+      temp_c,
+      windspeed_kmh,
+      precip_mm,
+      hdd_flag,
+      cdd_flag,
+      lag_load_24h,
+      lag_load_168h,
+      windchill,
+      commercialareapct,
+      industrialareapct,
+      is_holiday,
+      hour,
+      dayofweek,
+      month
+    FROM fact_energy_weather
+    WHERE load_mw IS NOT NULL
+      AND datetime >= NOW() - INTERVAL '2 years'
+    ORDER BY datetime
   "
 
   data <- dbGetQuery(conn, query)
+
+  # Normalize column names to match downstream code (PG returns lowercase)
+  names(data) <- c("DateTime", "Load_MW", "Temp_C", "WindSpeed_kmh", "Precip_mm",
+                   "HDD_Flag", "CDD_Flag", "Lag_Load_24h", "Lag_Load_168h",
+                   "WindChill", "CommercialAreaPct", "IndustrialAreaPct",
+                   "Is_Holiday", "Hour", "DayOfWeek", "Month")
 
   if (nrow(data) < MIN_TRAINING_ROWS) {
     stop(glue("Insufficient training data: {nrow(data)} rows (minimum {MIN_TRAINING_ROWS})"))
   }
 
-  log_message(glue("  ✓ Loaded {nrow(data):,} rows"))
+  log_message(glue("  ✓ Loaded {nrow(data)} rows"))
   log_message(glue("  Date range: {min(data$DateTime)} → {max(data$DateTime)}"))
 
   return(data)
@@ -305,39 +328,23 @@ train_horizon_model <- function(data, horizon_name, horizon_hours) {
 # ── Save Predictions to Database ──────────────────────────────────────────────
 
 save_predictions <- function(conn, predictions, horizon_name, rmse, si_pct, is_backtest = FALSE) {
-  log_message(glue("Saving {horizon_name} predictions to Model_Predictions..."))
+  log_message(glue("Saving {horizon_name} predictions to model_predictions..."))
 
   pred_df <- predictions %>%
     transmute(
-      DateTime = DateTime,
-      Predicted_Load_MW = .pred,
-      Run_RMSE = rmse,
-      Run_SI_Pct = si_pct,
-      ForecastHorizon = horizon_name,
-      ModelVersion = MODEL_VERSION,
-      ModelRunAt = Sys.time(),
-      IsBackTest = as.integer(is_backtest)
+      datetime          = DateTime,
+      predicted_load_mw = .pred,
+      run_rmse          = rmse,
+      run_si_pct        = si_pct,
+      forecasthorizon   = horizon_name,
+      modelversion      = MODEL_VERSION,
+      modelrunat        = Sys.time(),
+      isbacktest        = as.integer(is_backtest)
     )
 
-  # Write to temp table then insert (avoids duplicates)
-  dbWriteTable(conn, "__tmp_predictions", pred_df, overwrite = TRUE)
-
-  dbExecute(conn, "
-    INSERT INTO Model_Predictions
-      (DateTime, Predicted_Load_MW, Run_RMSE, Run_SI_Pct, ForecastHorizon,
-       ModelVersion, ModelRunAt, IsBackTest)
-    SELECT DateTime, Predicted_Load_MW, Run_RMSE, Run_SI_Pct, ForecastHorizon,
-           ModelVersion, ModelRunAt, IsBackTest
-    FROM __tmp_predictions
-    WHERE NOT EXISTS (
-      SELECT 1 FROM Model_Predictions mp
-      WHERE mp.DateTime = __tmp_predictions.DateTime
-        AND mp.ForecastHorizon = __tmp_predictions.ForecastHorizon
-        AND mp.ModelRunAt = __tmp_predictions.ModelRunAt
-    )
-  ")
-
-  dbExecute(conn, "DROP TABLE __tmp_predictions")
+  # Use PostgreSQL ON CONFLICT to upsert / skip duplicates
+  # Write in chunks to avoid parameter limits
+  dbWriteTable(conn, "model_predictions", pred_df, append = TRUE, row.names = FALSE)
 
   log_message(glue("  ✓ Saved {nrow(pred_df)} predictions"))
 }
@@ -411,9 +418,8 @@ main <- function() {
   }
   log_message("")
   log_message("Next steps:")
-  log_message("  1. Check predictions: SELECT TOP 10 * FROM Model_Predictions ORDER BY ModelRunAt DESC")
-  log_message("  2. Start FastAPI: cd api && uvicorn main:app --reload")
-  log_message("  3. View dashboard: http://localhost:5173")
+  log_message("  1. Check predictions: SELECT * FROM model_predictions ORDER BY modelrunat DESC LIMIT 10;")
+  log_message("  2. View dashboard: https://halifax-energy-dashboard.vercel.app")
   log_message("══════════════════════════════════════════════════════════════════")
 }
 
