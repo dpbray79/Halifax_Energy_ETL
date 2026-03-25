@@ -66,8 +66,7 @@ from sqlalchemy import create_engine, text
 # Database connection (override with env var DATABASE_URL)
 DB_URL = os.getenv(
     "DATABASE_URL",
-    "mssql+pyodbc://sa:Halifax@Energy2026!@localhost:1433/HalifaxEnergyProject"
-    "?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
+    "postgresql+psycopg2://postgres:postgres@localhost:5432/halifaxenergy"
 )
 
 # CCEI HFED endpoint (OASIS current report)
@@ -98,10 +97,10 @@ log = logging.getLogger("nsp_extract")
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_engine():
-    """Connect to SQL Server."""
-    log.info("Connecting to SQL Server...")
+    """Connect to PostgreSQL (Supabase)."""
+    log.info("Connecting to PostgreSQL...")
     try:
-        engine = create_engine(DB_URL, fast_executemany=True)
+        engine = create_engine(DB_URL)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         log.info("  ✓ Connected")
@@ -127,28 +126,24 @@ def get_last_extracted(engine, source_name="CCEI_HFED") -> datetime:
 
 
 def update_watermark(engine, source_name: str, timestamp: datetime, rows_inserted: int):
-    """Update ETL_Watermark with new extraction timestamp."""
+    """Update ETL_Watermark with new extraction timestamp (PostgreSQL upsert)."""
     with engine.begin() as conn:
         conn.execute(text("""
-            MERGE ETL_Watermark AS target
-            USING (SELECT :src AS SourceName) AS source
-            ON target.SourceName = source.SourceName
-            WHEN MATCHED THEN
-                UPDATE SET
-                    LastExtracted = :ts,
-                    RowsInserted = :rows,
-                    Status = 'OK',
-                    UpdatedAt = GETDATE()
-            WHEN NOT MATCHED THEN
-                INSERT (SourceName, LastExtracted, RowsInserted, Status, UpdatedAt)
-                VALUES (:src, :ts, :rows, 'OK', GETDATE());
+            INSERT INTO etl_watermark (sourcename, lastextracted, rowsinserted, status, updatedat)
+            VALUES (:src, :ts, :rows, 'OK', NOW())
+            ON CONFLICT (sourcename) DO UPDATE
+                SET lastextracted = EXCLUDED.lastextracted,
+                    rowsinserted  = EXCLUDED.rowsinserted,
+                    status        = 'OK',
+                    updatedat     = NOW();
         """), {"src": source_name, "ts": timestamp, "rows": rows_inserted})
     log.info(f"  ✓ Watermark updated: {source_name} → {timestamp}")
 
 
 def insert_load_data(engine, df: pd.DataFrame, source: str = "CCEI_HFED") -> int:
     """
-    Insert load data into stg_NSP_Load, skipping duplicates.
+    Insert load data into stg_nsp_load, skipping duplicates.
+    Uses PostgreSQL ON CONFLICT DO NOTHING for idempotency.
     Returns count of new rows inserted.
     """
     if df.empty:
@@ -182,21 +177,17 @@ def insert_load_data(engine, df: pd.DataFrame, source: str = "CCEI_HFED") -> int
     # Get row count before insert
     before = _count_rows(engine)
 
-    # Temp table + merge pattern (avoids duplicates)
-    df[["DateTime", "Load_MW", "Source", "InsertedAt", "IsProcessed"]].to_sql(
-        "__tmp_nsp_load", engine, if_exists="replace", index=False
-    )
-
+    # PostgreSQL ON CONFLICT DO NOTHING (requires unique constraint on datetime)
+    rows = df[["DateTime", "Load_MW", "Source", "InsertedAt", "IsProcessed"]].to_dict(orient="records")
     with engine.begin() as conn:
-        conn.execute(text("""
-            INSERT INTO stg_NSP_Load (DateTime, Load_MW, Source, InsertedAt, IsProcessed)
-            SELECT t.DateTime, t.Load_MW, t.Source, t.InsertedAt, t.IsProcessed
-            FROM   __tmp_nsp_load t
-            WHERE  NOT EXISTS (
-                SELECT 1 FROM stg_NSP_Load s WHERE s.DateTime = t.DateTime
-            )
-        """))
-        conn.execute(text("DROP TABLE IF EXISTS __tmp_nsp_load"))
+        conn.execute(
+            text("""
+                INSERT INTO stg_nsp_load (datetime, load_mw, source, insertedat, isprocessed)
+                VALUES (:DateTime, :Load_MW, :Source, :InsertedAt, :IsProcessed)
+                ON CONFLICT (datetime) DO NOTHING
+            """),
+            rows
+        )
 
     after = _count_rows(engine)
     inserted = after - before
@@ -206,9 +197,9 @@ def insert_load_data(engine, df: pd.DataFrame, source: str = "CCEI_HFED") -> int
 
 
 def _count_rows(engine) -> int:
-    """Count total rows in stg_NSP_Load."""
+    """Count total rows in stg_nsp_load."""
     with engine.connect() as conn:
-        return conn.execute(text("SELECT COUNT(*) FROM stg_NSP_Load")).scalar()
+        return conn.execute(text("SELECT COUNT(*) FROM stg_nsp_load")).scalar()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

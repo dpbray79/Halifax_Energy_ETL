@@ -29,6 +29,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: dashboard/package-lock.json
+          # package-lock.json is committed in dashboard/
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
@@ -61,9 +62,31 @@ jobs:
         with:
           r-version: '4.3.2'
 
+      - name: Install system libraries for R packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev \
+            libfontconfig1-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            libtiff5-dev \
+            libjpeg-dev
+
       - name: Install R dependencies
         run: |
-          R -e 'install.packages(c("tidyverse", "tidymodels", "xgboost", "DBI", "RPostgres", "lubridate", "glue", "here"), repos="https://cloud.r-project.org")'
+          R -e '
+            pkgs <- c("tidyverse", "tidymodels", "xgboost", "DBI", "RPostgres",
+                      "lubridate", "glue", "here")
+            install.packages(pkgs, repos = "https://cloud.r-project.org", Ncpus = 2)
+            missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
+            if (length(missing) > 0) stop(paste("Failed to install:", paste(missing, collapse = ", ")))
+            cat("All R packages installed successfully\n")
+          '
 
       - name: Install Python (for pre-processing)
         uses: actions/setup-python@v5
