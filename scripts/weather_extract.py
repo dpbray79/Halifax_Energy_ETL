@@ -57,9 +57,14 @@ from io import StringIO
 import warnings
 warnings.filterwarnings("ignore")
 
+from dotenv import load_dotenv
 import requests
 import pandas as pd
 from sqlalchemy import create_engine, text
+
+# Load environment variables from root .env
+PROJECT_ROOT = Path(__file__).parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG
@@ -68,8 +73,7 @@ from sqlalchemy import create_engine, text
 # Database connection
 DB_URL = os.getenv(
     "DATABASE_URL",
-    "mssql+pyodbc://sa:Halifax@Energy2026!@localhost:1433/HalifaxEnergyProject"
-    "?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
+    "postgresql+psycopg2://postgres:HalifaxEnergyETL@localhost:5432/halifaxenergy"
 )
 
 # Environment Canada bulk climate download endpoint
@@ -104,10 +108,10 @@ log = logging.getLogger("weather_extract")
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_engine():
-    """Connect to SQL Server."""
-    log.info("Connecting to SQL Server...")
+    """Connect to PostgreSQL."""
+    log.info("Connecting to PostgreSQL...")
     try:
-        engine = create_engine(DB_URL, fast_executemany=True)
+        engine = create_engine(DB_URL)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         log.info("  ✓ Connected")
@@ -118,43 +122,45 @@ def get_engine():
 
 
 def get_last_extracted(engine, source_name="Geomet") -> datetime:
-    """Get last extraction timestamp from ETL_Watermark."""
+    """Get last extraction timestamp from etl_watermark."""
     with engine.connect() as conn:
         result = conn.execute(
-            text("SELECT LastExtracted FROM ETL_Watermark WHERE SourceName = :src"),
+            text("SELECT last_extracted FROM etl_watermark WHERE source_name = :src"),
             {"src": source_name}
         ).fetchone()
 
         if result:
-            return result[0]
+            dt = result[0]
+            if dt and hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            return dt
         else:
             # Default to yesterday if no watermark exists
             return datetime.now() - timedelta(days=1)
 
 
 def update_watermark(engine, source_name: str, timestamp: datetime, rows_inserted: int):
-    """Update ETL_Watermark with new extraction timestamp."""
+    """Update etl_watermark with new extraction timestamp."""
+    # Ensure timestamp is naive
+    if timestamp and hasattr(timestamp, 'tzinfo') and timestamp.tzinfo is not None:
+        timestamp = timestamp.replace(tzinfo=None)
+
     with engine.begin() as conn:
         conn.execute(text("""
-            MERGE ETL_Watermark AS target
-            USING (SELECT :src AS SourceName) AS source
-            ON target.SourceName = source.SourceName
-            WHEN MATCHED THEN
-                UPDATE SET
-                    LastExtracted = :ts,
-                    RowsInserted = :rows,
-                    Status = 'OK',
-                    UpdatedAt = GETDATE()
-            WHEN NOT MATCHED THEN
-                INSERT (SourceName, LastExtracted, RowsInserted, Status, UpdatedAt)
-                VALUES (:src, :ts, :rows, 'OK', GETDATE());
+            INSERT INTO etl_watermark (source_name, last_extracted, rows_inserted, status, updated_at)
+            VALUES (:src, :ts, :rows, 'OK', NOW())
+            ON CONFLICT (source_name) DO UPDATE SET
+                last_extracted = EXCLUDED.last_extracted,
+                rows_inserted = EXCLUDED.rows_inserted,
+                status = 'OK',
+                updated_at = NOW();
         """), {"src": source_name, "ts": timestamp, "rows": rows_inserted})
     log.info(f"  ✓ Watermark updated: {source_name} → {timestamp}")
 
 
 def insert_weather_data(engine, df: pd.DataFrame, source: str = "EnvCanada_Stn50620") -> int:
     """
-    Insert weather data into stg_Weather, skipping duplicates.
+    Insert weather data into stg_weather, skipping duplicates.
     Returns count of new rows inserted.
     """
     if df.empty:
@@ -162,8 +168,8 @@ def insert_weather_data(engine, df: pd.DataFrame, source: str = "EnvCanada_Stn50
         return 0
 
     df = df.copy()
-    df["Source"] = source
-    df["InsertedAt"] = datetime.now()
+    df["source"] = source
+    df["inserted_at"] = datetime.now()
 
     # Validate required columns
     if "DateTime" not in df.columns:
@@ -171,15 +177,23 @@ def insert_weather_data(engine, df: pd.DataFrame, source: str = "EnvCanada_Stn50
         return 0
 
     # Clean and validate
-    df["DateTime"] = pd.to_datetime(df["DateTime"], errors="coerce")
-    df = df.dropna(subset=["DateTime"])
+    df["datetime"] = pd.to_datetime(df["DateTime"], errors="coerce")
+    df = df.dropna(subset=["datetime"])
 
+    # Map columns to lowercase for Postgres
+    col_map = {
+        "Temp_C": "temp_c",
+        "WindSpeed_kmh": "windspeed_kmh",
+        "Precip_mm": "precip_mm",
+        "Humidity_Pct": "humidity_pct"
+    }
+    
     # Ensure weather columns exist (fill with None if missing)
-    for col in ["Temp_C", "WindSpeed_kmh", "Precip_mm", "Humidity_Pct"]:
-        if col not in df.columns:
-            df[col] = None
+    for orig, target in col_map.items():
+        if orig in df.columns:
+            df[target] = pd.to_numeric(df[orig], errors="coerce")
         else:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+            df[target] = None
 
     if df.empty:
         log.warning("  No valid rows after cleaning")
@@ -188,21 +202,19 @@ def insert_weather_data(engine, df: pd.DataFrame, source: str = "EnvCanada_Stn50
     # Get row count before insert
     before = _count_rows(engine)
 
-    # Temp table + merge pattern
-    df[["DateTime", "Temp_C", "WindSpeed_kmh", "Precip_mm", "Humidity_Pct", "Source", "InsertedAt"]].to_sql(
+    # Temp table + on conflict pattern
+    df[["datetime", "temp_c", "windspeed_kmh", "precip_mm", "humidity_pct", "source", "inserted_at"]].to_sql(
         "__tmp_weather", engine, if_exists="replace", index=False
     )
 
     with engine.begin() as conn:
         conn.execute(text("""
-            INSERT INTO stg_Weather
-                (DateTime, Temp_C, WindSpeed_kmh, Precip_mm, Humidity_Pct, Source, InsertedAt)
-            SELECT t.DateTime, t.Temp_C, t.WindSpeed_kmh, t.Precip_mm, t.Humidity_Pct,
-                   t.Source, t.InsertedAt
+            INSERT INTO stg_weather
+                (datetime, temp_c, windspeed_kmh, precip_mm, humidity_pct, source, inserted_at)
+            SELECT t.datetime, t.temp_c, t.windspeed_kmh, t.precip_mm, t.humidity_pct,
+                   t.source, t.inserted_at
             FROM   __tmp_weather t
-            WHERE  NOT EXISTS (
-                SELECT 1 FROM stg_Weather s WHERE s.DateTime = t.DateTime
-            )
+            ON CONFLICT (datetime) DO NOTHING;
         """))
         conn.execute(text("DROP TABLE IF EXISTS __tmp_weather"))
 

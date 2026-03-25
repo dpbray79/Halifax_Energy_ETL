@@ -25,7 +25,7 @@ function Data() {
 
       setLatestData(latest)
       setSummary(summaryData)
-      setRecentData(recent.data)
+      setRecentData(recent)
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
@@ -116,7 +116,7 @@ function Data() {
               <div className="stat-content">
                 <span className="stat-label">Peak Load</span>
                 <span className="stat-value">
-                  {summary.max_load_mw?.toFixed(1)} MW
+                  {summary.max?.toFixed(1)} MW
                 </span>
               </div>
             </div>
@@ -128,7 +128,7 @@ function Data() {
               <div className="stat-content">
                 <span className="stat-label">Min Load</span>
                 <span className="stat-value">
-                  {summary.min_load_mw?.toFixed(1)} MW
+                  {summary.min?.toFixed(1)} MW
                 </span>
               </div>
             </div>
@@ -140,7 +140,7 @@ function Data() {
               <div className="stat-content">
                 <span className="stat-label">Average Load</span>
                 <span className="stat-value">
-                  {summary.avg_load_mw?.toFixed(1)} MW
+                  {summary.avg?.toFixed(1)} MW
                 </span>
               </div>
             </div>

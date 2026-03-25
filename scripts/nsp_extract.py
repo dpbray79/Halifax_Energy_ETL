@@ -55,9 +55,14 @@ from io import StringIO
 import warnings
 warnings.filterwarnings("ignore")
 
+from dotenv import load_dotenv
 import requests
 import pandas as pd
 from sqlalchemy import create_engine, text
+
+# Load environment variables from root .env
+PROJECT_ROOT = Path(__file__).parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG
@@ -66,7 +71,7 @@ from sqlalchemy import create_engine, text
 # Database connection (override with env var DATABASE_URL)
 DB_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://postgres:postgres@localhost:5432/halifaxenergy"
+    "postgresql+psycopg2://postgres:HalifaxEnergyETL@localhost:5432/halifaxenergy"
 )
 
 # CCEI HFED endpoint (OASIS current report)
@@ -111,31 +116,38 @@ def get_engine():
 
 
 def get_last_extracted(engine, source_name="CCEI_HFED") -> datetime:
-    """Get last extraction timestamp from ETL_Watermark."""
+    """Get last extraction timestamp from etl_watermark."""
     with engine.connect() as conn:
         result = conn.execute(
-            text("SELECT LastExtracted FROM ETL_Watermark WHERE SourceName = :src"),
+            text("SELECT last_extracted FROM etl_watermark WHERE source_name = :src"),
             {"src": source_name}
         ).fetchone()
 
         if result:
-            return result[0]
+            dt = result[0]
+            if dt and hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            return dt
         else:
-            # If watermark doesn't exist, default to yesterday
+            # Default to yesterday if no watermark exists
             return datetime.now() - timedelta(days=1)
 
 
 def update_watermark(engine, source_name: str, timestamp: datetime, rows_inserted: int):
-    """Update ETL_Watermark with new extraction timestamp (PostgreSQL upsert)."""
+    """Update etl_watermark with new extraction timestamp."""
+    # Ensure timestamp is naive
+    if timestamp and hasattr(timestamp, 'tzinfo') and timestamp.tzinfo is not None:
+        timestamp = timestamp.replace(tzinfo=None)
+        
     with engine.begin() as conn:
         conn.execute(text("""
-            INSERT INTO etl_watermark (sourcename, lastextracted, rowsinserted, status, updatedat)
+            INSERT INTO etl_watermark (source_name, last_extracted, rows_inserted, status, updated_at)
             VALUES (:src, :ts, :rows, 'OK', NOW())
-            ON CONFLICT (sourcename) DO UPDATE
-                SET lastextracted = EXCLUDED.lastextracted,
-                    rowsinserted  = EXCLUDED.rowsinserted,
-                    status        = 'OK',
-                    updatedat     = NOW();
+            ON CONFLICT (source_name) DO UPDATE SET
+                last_extracted = EXCLUDED.last_extracted,
+                rows_inserted = EXCLUDED.rows_inserted,
+                status = 'OK',
+                updated_at = NOW();
         """), {"src": source_name, "ts": timestamp, "rows": rows_inserted})
     log.info(f"  ✓ Watermark updated: {source_name} → {timestamp}")
 
@@ -143,7 +155,6 @@ def update_watermark(engine, source_name: str, timestamp: datetime, rows_inserte
 def insert_load_data(engine, df: pd.DataFrame, source: str = "CCEI_HFED") -> int:
     """
     Insert load data into stg_nsp_load, skipping duplicates.
-    Uses PostgreSQL ON CONFLICT DO NOTHING for idempotency.
     Returns count of new rows inserted.
     """
     if df.empty:
@@ -151,24 +162,22 @@ def insert_load_data(engine, df: pd.DataFrame, source: str = "CCEI_HFED") -> int
         return 0
 
     df = df.copy()
-    df["Source"] = source
-    df["InsertedAt"] = datetime.now()
-    df["IsProcessed"] = 0
+    df["source"] = source
+    df["inserted_at"] = datetime.now()
+    df["is_processed"] = False
 
-    # Validate required columns
-    if not {"DateTime", "Load_MW"}.issubset(df.columns):
+    # Ensure required columns exist
+    if "DateTime" not in df.columns or "Load_MW" not in df.columns:
         log.error(f"  ✗ Missing required columns. Got: {list(df.columns)}")
         return 0
 
-    # Clean and validate data
-    df["DateTime"] = pd.to_datetime(df["DateTime"], errors="coerce")
-    df = df.dropna(subset=["DateTime"])
-
-    df["Load_MW"] = pd.to_numeric(df["Load_MW"], errors="coerce")
-    df = df.dropna(subset=["Load_MW"])
+    # Clean and validate
+    df["datetime"] = pd.to_datetime(df["DateTime"], errors="coerce")
+    df["load_mw"] = pd.to_numeric(df["Load_MW"], errors="coerce")
+    df = df.dropna(subset=["datetime", "load_mw"])
 
     # Filter reasonable NS load range (300-3000 MW)
-    df = df[(df["Load_MW"] >= 300) & (df["Load_MW"] <= 3000)]
+    df = df[(df["load_mw"] >= 300) & (df["load_mw"] <= 3000)]
 
     if df.empty:
         log.warning("  No valid rows after cleaning")
@@ -178,12 +187,12 @@ def insert_load_data(engine, df: pd.DataFrame, source: str = "CCEI_HFED") -> int
     before = _count_rows(engine)
 
     # PostgreSQL ON CONFLICT DO NOTHING (requires unique constraint on datetime)
-    rows = df[["DateTime", "Load_MW", "Source", "InsertedAt", "IsProcessed"]].to_dict(orient="records")
+    rows = df[["datetime", "load_mw", "source", "inserted_at", "is_processed"]].to_dict(orient="records")
     with engine.begin() as conn:
         conn.execute(
             text("""
-                INSERT INTO stg_nsp_load (datetime, load_mw, source, insertedat, isprocessed)
-                VALUES (:DateTime, :Load_MW, :Source, :InsertedAt, :IsProcessed)
+                INSERT INTO stg_nsp_load (datetime, load_mw, source, inserted_at, is_processed)
+                VALUES (:datetime, :load_mw, :source, :inserted_at, :is_processed)
                 ON CONFLICT (datetime) DO NOTHING
             """),
             rows
@@ -237,44 +246,47 @@ def fetch_ccei_hfed(start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
                 log.warning(f"  ⚠ No tables found in OASIS response")
                 return pd.DataFrame()
 
-            # OASIS report contains the load data in the first table
-            df_raw = tables[0]
+            # The Oasis report (current_report.shtml) is often a key-value style table
+            # We'll search through all tables for "Net Load" and "Last Updated"
+            load_val = None
+            dt = None
 
-            # Normalize column names
-            df_raw.columns = [str(c).strip() for c in df_raw.columns]
+            for t in tables:
+                # Convert entire table to string to avoid "float" in container errors
+                t_str = t.astype(str)
+                # Search for Net Load and Last Updated
+                for idx, row in t_str.iterrows():
+                    row_list = row.tolist()
+                    key_cell = str(row_list[0]) if len(row_list) > 0 else ""
+                    
+                    # Check for "Net Load"
+                    if "Net Load" in key_cell:
+                        try:
+                            # Second column should be the value
+                            val_cell = str(row_list[1]) if len(row_list) > 1 else ""
+                            load_val = float(val_cell.replace(",", ""))
+                        except:
+                            continue
+                    
+                    # Check for "Last Updated"
+                    if "Last Updated" in key_cell:
+                        # "Last Updated: 25-Apr-25 02:30:10"
+                        try:
+                            ts_str = key_cell.split("Updated:")[-1].strip()
+                            dt = datetime.strptime(ts_str, "%d-%b-%y %H:%M:%S")
+                        except:
+                            continue
 
-            # Find datetime column (flexible matching)
-            dt_col = None
-            for col in df_raw.columns:
-                if any(keyword in col.lower() for keyword in ["date", "time", "hour", "datetime"]):
-                    dt_col = col
-                    break
+            if load_val is not None:
+                if dt is None:
+                    dt = datetime.now()
+                
+                df = pd.DataFrame([{"DateTime": dt, "Load_MW": load_val}])
+                log.info(f"  ✓ Retrieved: {dt} -> {load_val} MW")
+                return df
 
-            # Find load/demand column (flexible matching)
-            load_col = None
-            for col in df_raw.columns:
-                if any(keyword in col.lower() for keyword in ["load", "mw", "demand", "net", "total"]):
-                    load_col = col
-                    break
-
-            if not dt_col or not load_col:
-                log.error(f"  ✗ Could not identify columns. Available: {list(df_raw.columns)}")
-                return pd.DataFrame()
-
-            log.info(f"  ✓ Using columns: DateTime='{dt_col}', Load_MW='{load_col}'")
-
-            # Build result DataFrame
-            df = pd.DataFrame({
-                "DateTime": pd.to_datetime(df_raw[dt_col], errors="coerce"),
-                "Load_MW":  pd.to_numeric(df_raw[load_col], errors="coerce"),
-            })
-
-            # Filter to requested date range
-            df = df.dropna()
-            df = df[(df["DateTime"] >= start_dt) & (df["DateTime"] <= end_dt)]
-
-            log.info(f"  ✓ Fetched {len(df):,} rows")
-            return df
+            log.error(f"  ✗ Could not find 'Net Load' in any table")
+            return pd.DataFrame()
 
         except requests.exceptions.RequestException as e:
             log.warning(f"  ⚠ Request failed: {e}")

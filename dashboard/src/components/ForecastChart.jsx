@@ -48,11 +48,11 @@ function ForecastChart({ horizon = 'H1', days = 7 }) {
 
       // Merge actuals and predictions by datetime
       const actualsMap = new Map(
-        actualsResponse.data.map((d) => [d.datetime, d.load_mw])
+        (actualsResponse?.data || []).map((d) => [d.datetime, d.load_mw])
       )
 
       const predictionsMap = new Map(
-        predictionsResponse.data.map((d) => [d.datetime, d.predicted_load_mw])
+        (predictionsResponse?.data || []).map((d) => [d.datetime, d.predicted_load_mw])
       )
 
       // Get all unique timestamps

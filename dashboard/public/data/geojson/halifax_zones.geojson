@@ -1,0 +1,117 @@
+{
+  "type": "FeatureCollection",
+  "name": "halifax_energy_zones",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "halifax_central",
+      "properties": {
+        "zone_id": "halifax_central",
+        "zone_name": "Halifax Central",
+        "population": 85000,
+        "commercial_area_pct": 45.2,
+        "industrial_area_pct": 12.3
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-63.575, 44.645],
+          [-63.575, 44.665],
+          [-63.555, 44.665],
+          [-63.555, 44.645],
+          [-63.575, 44.645]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "dartmouth",
+      "properties": {
+        "zone_id": "dartmouth",
+        "zone_name": "Dartmouth",
+        "population": 70000,
+        "commercial_area_pct": 38.5,
+        "industrial_area_pct": 25.1
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-63.555, 44.645],
+          [-63.555, 44.665],
+          [-63.535, 44.665],
+          [-63.535, 44.645],
+          [-63.555, 44.645]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bedford",
+      "properties": {
+        "zone_id": "bedford",
+        "zone_name": "Bedford",
+        "population": 30000,
+        "commercial_area_pct": 28.3,
+        "industrial_area_pct": 8.2
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-63.645, 44.725],
+          [-63.645, 44.745],
+          [-63.625, 44.745],
+          [-63.625, 44.725],
+          [-63.645, 44.725]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "sackville",
+      "properties": {
+        "zone_id": "sackville",
+        "zone_name": "Lower Sackville",
+        "population": 40000,
+        "commercial_area_pct": 22.1,
+        "industrial_area_pct": 15.4
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-63.695, 44.765],
+          [-63.695, 44.785],
+          [-63.675, 44.785],
+          [-63.675, 44.765],
+          [-63.695, 44.765]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "clayton_park",
+      "properties": {
+        "zone_id": "clayton_park",
+        "zone_name": "Clayton Park",
+        "population": 25000,
+        "commercial_area_pct": 35.7,
+        "industrial_area_pct": 5.3
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-63.625, 44.645],
+          [-63.625, 44.665],
+          [-63.605, 44.665],
+          [-63.605, 44.645],
+          [-63.625, 44.645]
+        ]]
+      }
+    }
+  ]
+}

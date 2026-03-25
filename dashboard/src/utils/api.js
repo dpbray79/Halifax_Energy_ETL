@@ -61,10 +61,9 @@ export const getLatestActual = async () => {
       .select('datetime, load_mw, source')
       .order('datetime', { ascending: false })
       .limit(1)
-      .single()
-
+ 
     if (error) throw error
-    return data
+    return data && data.length > 0 ? data[0] : null
   } catch (error) {
     console.error('Error fetching latest actual:', error)
     throw error
@@ -180,10 +179,9 @@ export const getLatestPrediction = async (horizon) => {
       .eq('forecast_horizon', horizon)
       .order('datetime', { ascending: false })
       .limit(1)
-      .single()
-
+ 
     if (error) throw error
-    return data
+    return data && data.length > 0 ? data[0] : null
   } catch (error) {
     console.error('Error fetching latest prediction:', error)
     throw error
