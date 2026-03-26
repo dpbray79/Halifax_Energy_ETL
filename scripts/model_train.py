@@ -82,6 +82,10 @@ def engineer_features(df):
     log.info("Engineering features...")
     df = df.copy()
     
+    # Ensure temporal columns are numeric and filled
+    for col in ['hour', 'day_of_week', 'month']:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+
     # Cyclic encoding for temporal features
     df['hour_sin'] = np.sin(2 * np.pi * df['hour'] / 24)
     df['hour_cos'] = np.cos(2 * np.pi * df['hour'] / 24)
@@ -91,13 +95,14 @@ def engineer_features(df):
     df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
     
     # Fix types for PostgreSQL/SQLAlchemy (ensure numeric/bool)
-    df['hdd_flag'] = df['hdd_flag'].astype(int)
-    df['cdd_flag'] = df['cdd_flag'].astype(int)
+    df['hdd_flag'] = pd.to_numeric(df['hdd_flag'], errors='coerce').fillna(0).astype(int)
+    df['cdd_flag'] = pd.to_numeric(df['cdd_flag'], errors='coerce').fillna(0).astype(int)
+    df['is_holiday'] = pd.to_numeric(df['is_holiday'], errors='coerce').fillna(0).astype(int)
     df['commercial_area_pct'] = pd.to_numeric(df['commercial_area_pct'], errors='coerce').fillna(0)
     df['industrial_area_pct'] = pd.to_numeric(df['industrial_area_pct'], errors='coerce').fillna(0)
     
     # Derived features
-    df['temp_squared'] = df['temp_c'] ** 2
+    df['temp_squared'] = df['temp_c'].fillna(10) ** 2
     df['is_weekend'] = df['day_of_week'].isin([0, 6]).astype(int)
     df['is_peak_hour'] = df['hour'].isin([7, 8, 9, 17, 18, 19]).astype(int)
     
