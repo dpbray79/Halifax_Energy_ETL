@@ -151,11 +151,11 @@ load_training_data <- function(conn) {
       lag_load_24h,
       lag_load_168h,
       windchill,
-      commercialareapct,
-      industrialareapct,
+      commercial_area_pct,
+      industrial_area_pct,
       is_holiday,
       hour,
-      dayofweek,
+      day_of_week,
       month
     FROM fact_energy_weather
     WHERE load_mw IS NOT NULL
@@ -336,10 +336,10 @@ save_predictions <- function(conn, predictions, horizon_name, rmse, si_pct, is_b
       predicted_load_mw = .pred,
       run_rmse          = rmse,
       run_si_pct        = si_pct,
-      forecasthorizon   = horizon_name,
-      modelversion      = MODEL_VERSION,
-      modelrunat        = Sys.time(),
-      isbacktest        = as.integer(is_backtest)
+      forecast_horizon  = horizon_name,
+      model_version     = MODEL_VERSION,
+      model_run_at      = Sys.time(),
+      is_backtest       = as.integer(is_backtest)
     )
 
   # Use PostgreSQL ON CONFLICT to upsert / skip duplicates
