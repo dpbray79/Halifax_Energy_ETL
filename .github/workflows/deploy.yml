@@ -30,25 +30,20 @@ jobs:
           cache: 'npm'
           cache-dependency-path: dashboard/package-lock.json
 
-      - name: Install Dashboard Dependencies
-        run: npm ci
-        working-directory: ./dashboard
-
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
-      - name: Build Dashboard (Vite)
-        run: npm run build
-        working-directory: ./dashboard
+      - name: Build Dashboard for Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Deploy to Vercel
-        run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
 
   # ── Run R XGBoost Model ─────────────────────────────────────────────────────
   run-model:
