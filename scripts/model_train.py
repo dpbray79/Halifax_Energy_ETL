@@ -90,6 +90,12 @@ def engineer_features(df):
     df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
     df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
     
+    # Fix types for PostgreSQL/SQLAlchemy (ensure numeric/bool)
+    df['hdd_flag'] = df['hdd_flag'].astype(int)
+    df['cdd_flag'] = df['cdd_flag'].astype(int)
+    df['commercial_area_pct'] = pd.to_numeric(df['commercial_area_pct'], errors='coerce').fillna(0)
+    df['industrial_area_pct'] = pd.to_numeric(df['industrial_area_pct'], errors='coerce').fillna(0)
+    
     # Derived features
     df['temp_squared'] = df['temp_c'] ** 2
     df['is_weekend'] = df['day_of_week'].isin([0, 6]).astype(int)
