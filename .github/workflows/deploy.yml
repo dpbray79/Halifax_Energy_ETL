@@ -57,55 +57,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup R
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: '4.3.2'
-
-      - name: Install system libraries for R packages
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y \
-            libcurl4-openssl-dev \
-            libssl-dev \
-            libxml2-dev \
-            libfontconfig1-dev \
-            libharfbuzz-dev \
-            libfribidi-dev \
-            libfreetype6-dev \
-            libpng-dev \
-            libtiff5-dev \
-            libjpeg-dev
-
-      - name: Install R dependencies
-        run: |
-          R -e '
-            pkgs <- c("tidyverse", "tidymodels", "xgboost", "DBI", "RPostgres",
-                      "lubridate", "glue", "here")
-            install.packages(pkgs, repos = "https://cloud.r-project.org", Ncpus = 2)
-            missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
-            if (length(missing) > 0) stop(paste("Failed to install:", paste(missing, collapse = ", ")))
-            cat("All R packages installed successfully\n")
-          '
-
-      - name: Install Python (for pre-processing)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Install Python dependencies
         run: |
-          pip install SQLAlchemy psycopg2-binary pandas python-dotenv
+          pip install SQLAlchemy psycopg2-binary pandas python-dotenv xgboost scikit-learn
 
       - name: Transform Staging to Gold
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scripts/transform_gold.py
 
-      - name: Run XGBoost Model Training
+      - name: Run XGBoost Model Training (Python)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: Rscript model/HalifaxEnergy_Model.R
+        run: python scripts/model_train.py
         working-directory: .
 
       - name: Upload Model Artifacts
