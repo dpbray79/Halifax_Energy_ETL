@@ -119,12 +119,12 @@ def engineer_features(df):
     df = pd.concat([df, season_dummies], axis=1)
     
     # Fill NAs
-    df['temp_c'].fillna(10, inplace=True)
-    df['windspeed_kmh'].fillna(15, inplace=True)
-    df['precip_mm'].fillna(0, inplace=True)
-    df['commercial_area_pct'].fillna(0, inplace=True)
-    df['industrial_area_pct'].fillna(0, inplace=True)
-    df['windchill'].fillna(df['temp_c'] * df['windspeed_kmh'], inplace=True)
+    df['temp_c'] = df['temp_c'].fillna(10)
+    df['windspeed_kmh'] = df['windspeed_kmh'].fillna(15)
+    df['precip_mm'] = df['precip_mm'].fillna(0)
+    df['commercial_area_pct'] = df['commercial_area_pct'].fillna(0)
+    df['industrial_area_pct'] = df['industrial_area_pct'].fillna(0)
+    df['windchill'] = df['windchill'].fillna(df['temp_c'] * df['windspeed_kmh'])
     
     log.info("  ✓ Features engineered")
     return df
