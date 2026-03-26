@@ -171,6 +171,13 @@ def train_and_predict(df, horizon_name, horizon_hours):
     )
     model.fit(X_train, y_train)
     
+    # Save model artifacts
+    artifacts_dir = PROJECT_ROOT / 'model' / 'model_artifacts'
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    model_path = artifacts_dir / f'model_{horizon_name}.json'
+    model.save_model(str(model_path))
+    log.info(f"  ✓ Model artifact saved to {model_path}")
+    
     # Evaluate
     y_pred = model.predict(X_test)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))

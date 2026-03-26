@@ -31,6 +31,10 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
           # package-lock.json is committed in dashboard/
 
+      - name: Install Dashboard Dependencies
+        run: npm ci
+        working-directory: ./dashboard
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
