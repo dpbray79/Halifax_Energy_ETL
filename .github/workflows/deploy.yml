@@ -97,6 +97,11 @@ jobs:
         run: |
           pip install SQLAlchemy psycopg2-binary pandas python-dotenv
 
+      - name: Transform Staging to Gold
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/transform_gold.py
+
       - name: Run XGBoost Model Training
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -134,7 +139,17 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scripts/nsp_extract.py
 
+      - name: Transform Staging to Gold
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/transform_gold.py
+
       - name: Extract Weather Data
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scripts/weather_extract.py
+
+      - name: Transform Gold Layer (Post-Extraction)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/transform_gold.py
