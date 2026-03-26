@@ -95,9 +95,9 @@ def engineer_features(df):
     df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
     
     # Fix types for PostgreSQL/SQLAlchemy (ensure numeric/bool)
-    df['hdd_flag'] = pd.to_numeric(df['hdd_flag'], errors='coerce').fillna(0).astype(int)
-    df['cdd_flag'] = pd.to_numeric(df['cdd_flag'], errors='coerce').fillna(0).astype(int)
-    df['is_holiday'] = pd.to_numeric(df['is_holiday'], errors='coerce').fillna(0).astype(int)
+    df['hdd_flag'] = pd.to_numeric(df['hdd_flag'], errors='coerce').fillna(0).astype(bool)
+    df['cdd_flag'] = pd.to_numeric(df['cdd_flag'], errors='coerce').fillna(0).astype(bool)
+    df['is_holiday'] = pd.to_numeric(df['is_holiday'], errors='coerce').fillna(0).astype(bool)
     df['commercial_area_pct'] = pd.to_numeric(df['commercial_area_pct'], errors='coerce').fillna(0)
     df['industrial_area_pct'] = pd.to_numeric(df['industrial_area_pct'], errors='coerce').fillna(0)
     
@@ -190,7 +190,7 @@ def train_and_predict(df, horizon_name, horizon_hours):
         'forecast_horizon': horizon_name,
         'model_version': MODEL_VERSION,
         'model_run_at': datetime.now(),
-        'is_backtest': 0
+        'is_backtest': False
     })
     
     return pred_df
