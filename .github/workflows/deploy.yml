@@ -1,18 +1,23 @@
 name: Deploy to Vercel & Run R Model
 
+
 on:
   push:
     branches: [main]
   workflow_dispatch:  # Allow manual triggering
   schedule:
     # Run daily at 4:00 AM UTC for model retraining
-    - cron: '0 4 * * *'
+    - cron: '0 4 * * *'→ Runs at 04:00
+
     # Run daily at 6:00 AM UTC for data extraction
-    - cron: '0 6 * * *'
+    - cron: '0 6 * * *'→ Runs at 06:00
+
+
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
 
 jobs:
   # ── Deploy Dashboard to Vercel ──────────────────────────────────────────────
@@ -23,6 +28,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -31,16 +37,20 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
           # package-lock.json is committed in dashboard/
 
+
       - name: Install Dashboard Dependencies
         run: npm ci
-        working-directory: ./dashboard
+        
+
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
+
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: ./dashboard
+        
+
 
       - name: Build Dashboard (Vite)
         run: npm run build
@@ -49,9 +59,11 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
+
       - name: Deploy to Vercel
         run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
         working-directory: ./dashboard
+
 
   # ── Run R XGBoost Model ─────────────────────────────────────────────────────
   run-model:
@@ -61,63 +73,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+
       - name: Install Python dependencies
         run: |
           pip install SQLAlchemy psycopg2-binary pandas python-dotenv xgboost scikit-learn
+
 
       - name: Transform Staging to Gold
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scripts/transform_gold.py
+
 
       - name: Run XGBoost Model Training (Python)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scripts/model_train.py
-        working-directory: .
-
-      - name: Upload Model Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-artifacts
-          path: model/model_artifacts/
-          retention-days: 30
-
-  # ── Run Daily Data Extraction ───────────────────────────────────────────────
-  extract-data:
-    name: Extract CCEI HFED & Weather Data
-    runs-on: ubuntu-latest
-    # Only run on scheduled events (not on push or manual dispatch)
-    if: github.event_name == 'schedule'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-
-      - name: Extract CCEI HFED Load Data
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python scripts/nsp_extract.py
-
-      - name: Transform Staging to Gold
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python scripts/transform_gold.py
-
-      - name: Extract Weather Data
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python scripts/weather_extract.py
-
-      - name: Transform Gold Layer (Post-Extraction)
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python scripts/transform_gold.py
