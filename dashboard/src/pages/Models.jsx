@@ -10,6 +10,7 @@ function Models() {
   const [training, setTraining] = useState(false)
   const [trainResult, setTrainResult] = useState(null)
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('xgboost')
+  const [selectedHorizon, setSelectedHorizon] = useState(null)
   const [tune, setTune] = useState(false)
 
   useEffect(() => {
