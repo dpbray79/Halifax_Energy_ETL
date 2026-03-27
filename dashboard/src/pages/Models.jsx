@@ -12,6 +12,8 @@ function Models() {
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('xgboost')
   const [selectedHorizon, setSelectedHorizon] = useState(null)
   const [tune, setTune] = useState(false)
+  const [useWeather, setUseWeather] = useState(true)
+  const [useRolling, setUseRolling] = useState(false)
 
   useEffect(() => {
     loadModelStatus()
@@ -38,6 +40,8 @@ function Models() {
         horizon: selectedHorizon,
         algorithm: selectedAlgorithm,
         tune: tune,
+        weather: useWeather,
+        rolling: useRolling
       })
 
       setTrainResult({
@@ -64,7 +68,7 @@ function Models() {
         <div>
           <h1>Model Management</h1>
           <p className="text-muted">
-            Train and monitor multi-regression forecasting models
+            Train and monitor multi-feature forecasting models
           </p>
         </div>
       </div>
@@ -73,7 +77,7 @@ function Models() {
       <section className="models-section card">
         <h2>Train Models</h2>
         <p className="text-sm text-muted">
-          Trigger predictive regression training for specific horizons
+          Compare results with/without weather data and rolling aggregates
         </p>
 
         <div className="training-controls">
@@ -106,21 +110,46 @@ function Models() {
             </select>
           </div>
 
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={tune}
-              onChange={(e) => setTune(e.target.checked)}
-              disabled={training}
-            />
-            <span>Enable Hyperparameter Tuning</span>
-          </label>
+          <div className="feature-toggles">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={useWeather}
+                onChange={(e) => {
+                  setUseWeather(e.target.checked)
+                  if (!e.target.checked) setUseRolling(false)
+                }}
+                disabled={training}
+              />
+              <span>Include Weather Data</span>
+            </label>
+
+            <label className={`checkbox-label ${!useWeather ? 'disabled' : ''}`}>
+              <input
+                type="checkbox"
+                checked={useRolling}
+                onChange={(e) => setUseRolling(e.target.checked)}
+                disabled={training || !useWeather}
+              />
+              <span>Use Rolling Aggregates (24h)</span>
+            </label>
+
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={tune}
+                onChange={(e) => setTune(e.target.checked)}
+                disabled={training}
+              />
+              <span>Hyperparameter Tuning</span>
+            </label>
+          </div>
 
           <button
             onClick={handleRunModel}
             disabled={training}
             className="btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem' }}
           >
             {training ? (
               <>
@@ -130,7 +159,7 @@ function Models() {
             ) : (
               <>
                 <Play size={18} />
-                Run Training
+                Run Comparison Model
               </>
             )}
           </button>

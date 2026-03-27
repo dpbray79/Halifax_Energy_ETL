@@ -121,26 +121,25 @@ export const getPredictions = async ({
   start,
   end,
   limit = 1000,
-  latest_run_only = false
+  latest_run_only = false,
+  use_weather,
+  use_rolling,
+  algorithm
 } = {}) => {
   try {
     let query = supabase
       .from(TABLES.PREDICTIONS)
       .select('*')
-      .order('datetime', { ascending: false })
+      .order('datetime', { ascending: true })
       .limit(limit)
 
-    if (horizon) {
-      query = query.eq('forecast_horizon', horizon)
-    }
-
-    if (start) {
-      query = query.gte('datetime', start)
-    }
-
-    if (end) {
-      query = query.lte('datetime', end)
-    }
+    if (horizon) query = query.eq('forecast_horizon', horizon)
+    if (use_weather !== undefined) query = query.eq('use_weather', use_weather)
+    if (use_rolling !== undefined) query = query.eq('use_rolling', use_rolling)
+    if (algorithm) query = query.eq('model_algorithm', algorithm)
+    
+    if (start) query = query.gte('datetime', start)
+    if (end) query = query.lte('datetime', end)
 
     if (latest_run_only) {
       // Get latest model_run_at first
@@ -197,7 +196,7 @@ export const getModelPerformance = async (horizon = null) => {
   try {
     let query = supabase
       .from(TABLES.PREDICTIONS)
-      .select('forecast_horizon, run_rmse, run_si_pct, model_version, model_run_at')
+      .select('forecast_horizon, run_rmse, run_si_pct, model_version, model_run_at, use_weather, use_rolling, model_algorithm')
       .order('model_run_at', { ascending: false })
 
     if (horizon) {
@@ -208,12 +207,14 @@ export const getModelPerformance = async (horizon = null) => {
 
     if (error) throw error
 
-    // Group by horizon and get latest metrics
+    // Group by horizon and config (weather/rolling) and get latest for each
     const metrics = {}
     data.forEach(row => {
       const h = row.forecast_horizon
-      if (!metrics[h] || new Date(row.model_run_at) > new Date(metrics[h].model_run_at)) {
-        metrics[h] = row
+      const configKey = `${h}_W${row.use_weather ? 1 : 0}_R${row.use_rolling ? 1 : 0}`
+      
+      if (!metrics[configKey] || new Date(row.model_run_at) > new Date(metrics[configKey].model_run_at)) {
+        metrics[configKey] = row
       }
     })
 
@@ -282,14 +283,14 @@ export const getZones = async ({ horizon = 'H1', timestamp } = {}) => {
  * @param {boolean} data.backtest - Run backtest
  * @returns {Promise<Object>} Training job info
  */
-export const runModel = async ({ horizon, algorithm = 'xgboost', tune = false } = {}) => {
+export const runModel = async ({ horizon, algorithm = 'xgboost', tune = false, weather = true, rolling = false } = {}) => {
   // This would call a Supabase Edge Function or GitHub Action
-  console.log(`Triggering model run: horizon=${horizon}, algorithm=${algorithm}, tune=${tune}`)
+  console.log(`Triggering model run: horizon=${horizon}, algorithm=${algorithm}, tune=${tune}, weather=${weather}, rolling=${rolling}`)
   
   // Simulation of a successful trigger
   return {
     status: 'success',
-    message: `Model training triggered: ${algorithm.toUpperCase()} (${horizon || 'All Horizons'})`,
+    message: `Model training triggered: ${algorithm.toUpperCase()} (Weather: ${weather ? 'ON' : 'OFF'}, Rolling: ${rolling ? 'ON' : 'OFF'})`,
     details: {
       estimated_duration: tune ? '5-10 minutes' : '1-2 minutes'
     }

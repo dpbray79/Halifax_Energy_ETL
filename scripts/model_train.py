@@ -80,8 +80,8 @@ def load_training_data(engine):
     log.info(f"  ✓ Loaded {len(df)} rows")
     return df
 
-def engineer_features(df):
-    log.info("Engineering features...")
+def engineer_features(df, use_weather=True, use_rolling=False):
+    log.info(f"Engineering features (weather={use_weather}, rolling={use_rolling})...")
     df = df.copy()
     
     # Ensure temporal columns are numeric and filled
@@ -96,62 +96,54 @@ def engineer_features(df):
     df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
     df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
     
-    # Fix types for PostgreSQL/SQLAlchemy (ensure numeric/bool)
-    df['hdd_flag'] = pd.to_numeric(df['hdd_flag'], errors='coerce').fillna(0).astype(bool)
-    df['cdd_flag'] = pd.to_numeric(df['cdd_flag'], errors='coerce').fillna(0).astype(bool)
+    # Flags
     df['is_holiday'] = pd.to_numeric(df['is_holiday'], errors='coerce').fillna(0).astype(bool)
-    df['commercial_area_pct'] = pd.to_numeric(df['commercial_area_pct'], errors='coerce').fillna(0)
-    df['industrial_area_pct'] = pd.to_numeric(df['industrial_area_pct'], errors='coerce').fillna(0)
-    
-    # Derived features
-    df['temp_squared'] = df['temp_c'].fillna(10) ** 2
     df['is_weekend'] = df['day_of_week'].isin([0, 6]).astype(int)
     df['is_peak_hour'] = df['hour'].isin([7, 8, 9, 17, 18, 19]).astype(int)
     
-    # Season mapping
-    def get_season(m):
-        if m in [12, 1, 2]: return 1 # Winter
-        if m in [3, 4, 5]: return 2  # Spring
-        if m in [6, 7, 8]: return 3  # Summer
-        return 4                     # Fall
-    df['season'] = df['month'].apply(get_season)
-    
-    # One-hot encoding for season
-    season_dummies = pd.get_dummies(df['season'], prefix='season').astype(int)
-    df = pd.concat([df, season_dummies], axis=1)
-    
-    # Fill NAs
-    df['temp_c'] = df['temp_c'].fillna(10)
-    df['windspeed_kmh'] = df['windspeed_kmh'].fillna(15)
-    df['precip_mm'] = df['precip_mm'].fillna(0)
-    df['commercial_area_pct'] = df['commercial_area_pct'].fillna(0)
-    df['industrial_area_pct'] = df['industrial_area_pct'].fillna(0)
-    df['windchill'] = df['windchill'].fillna(df['temp_c'] * df['windspeed_kmh'])
+    if use_weather:
+        df['temp_c'] = df['temp_c'].fillna(10)
+        df['windspeed_kmh'] = df['windspeed_kmh'].fillna(15)
+        df['precip_mm'] = df['precip_mm'].fillna(0)
+        
+        df['hdd_flag'] = pd.to_numeric(df['hdd_flag'], errors='coerce').fillna(0).astype(bool)
+        df['cdd_flag'] = pd.to_numeric(df['cdd_flag'], errors='coerce').fillna(0).astype(bool)
+        
+        df['temp_squared'] = df['temp_c'] ** 2
+        df['windchill'] = df['temp_c'] * df['windspeed_kmh']
+        
+        if use_rolling:
+            log.info("  - Computing rolling weather aggregates (24h)...")
+            df = df.sort_values('datetime')
+            df['temp_rolling_24h'] = df['temp_c'].rolling(window=24, min_periods=1).mean()
+            df['wind_rolling_24h'] = df['windspeed_kmh'].rolling(window=24, min_periods=1).mean()
     
     log.info("  ✓ Features engineered")
     return df
 
-def train_and_predict(df, horizon_name, horizon_hours, algorithm='xgboost', tune=False):
-    log.info(f"Training {horizon_name} model ({horizon_hours}h) using {algorithm} (tune={tune})...")
+def train_and_predict(df, horizon_name, horizon_hours, algorithm='xgboost', tune=False, use_weather=True, use_rolling=False):
+    log.info(f"Training {horizon_name} model ({horizon_hours}h) using {algorithm} (weather={use_weather}, rolling={use_rolling})...")
     
     # Prepare target: shift load by horizon into the future (lead)
     df_model = df.copy().sort_values('datetime')
     df_model['target_load'] = df_model['load_mw'].shift(-horizon_hours)
     df_model['lag_horizon'] = df_model['load_mw'].shift(horizon_hours)
     
-    # Drop rows where target is NA (last few rows of the dataset)
+    # Drop rows where target is NA
     df_full = df_model.dropna(subset=['target_load']).copy()
     
-    # Features to use for training
+    # Base Features (Temporal)
     features = [
-        'temp_c', 'windspeed_kmh', 'precip_mm', 'hdd_flag', 'cdd_flag', 
-        'windchill', 'lag_load_24h', 'lag_load_168h', 'lag_horizon',
-        'commercial_area_pct', 'industrial_area_pct', 'is_holiday',
         'hour_sin', 'hour_cos', 'dow_sin', 'dow_cos', 'month_sin', 'month_cos',
-        'temp_squared', 'is_weekend', 'is_peak_hour'
+        'is_weekend', 'is_peak_hour', 'is_holiday', 'lag_horizon'
     ]
-    features += [c for c in df_full.columns if c.startswith('season_')]
     
+    # Conditional Weather Features
+    if use_weather:
+        features += ['temp_c', 'windspeed_kmh', 'precip_mm', 'hdd_flag', 'cdd_flag', 'windchill', 'temp_squared']
+        if use_rolling:
+            features += ['temp_rolling_24h', 'wind_rolling_24h']
+            
     X = df_full[features]
     y = df_full['target_load']
     
@@ -231,7 +223,9 @@ def train_and_predict(df, horizon_name, horizon_hours, algorithm='xgboost', tune
         'model_version': MODEL_VERSION,
         'model_run_at': datetime.now(),
         'is_backtest': tune,
-        'model_algorithm': algorithm
+        'model_algorithm': algorithm,
+        'use_weather': use_weather,
+        'use_rolling': use_rolling
     })
     
     return pred_df
@@ -246,21 +240,31 @@ def main():
     parser.add_argument("--horizon", type=str, choices=["H1", "H2", "H3", "all"], default="all")
     parser.add_argument("--algorithm", type=str, choices=["xgboost", "random_forest", "linear"], default="xgboost")
     parser.add_argument("--tune", action="store_true", help="Run hyperparameter tuning")
+    parser.add_argument("--weather", type=str, choices=["on", "off"], default="on")
+    parser.add_argument("--rolling", type=str, choices=["on", "off"], default="off")
     args = parser.parse_args()
+
+    use_weather = args.weather == "on"
+    use_rolling = args.rolling == "on"
 
     log.info("=" * 60)
     log.info(f"  Halifax Energy — {args.algorithm.upper()} Training Runner")
+    log.info(f"  Configuration: weather={use_weather}, rolling={use_rolling}")
     log.info("=" * 60)
     
     try:
         engine = connect_db()
         raw_df = load_training_data(engine)
-        df = engineer_features(raw_df)
+        df = engineer_features(raw_df, use_weather=use_weather, use_rolling=use_rolling)
         
         target_horizons = HORIZONS.items() if args.horizon == "all" else {args.horizon: HORIZONS[args.horizon]}.items()
         
         for name, hours in target_horizons:
-            pred_df = train_and_predict(df, name, hours, algorithm=args.algorithm, tune=args.tune)
+            pred_df = train_and_predict(df, name, hours, 
+                                        algorithm=args.algorithm, 
+                                        tune=args.tune, 
+                                        use_weather=use_weather, 
+                                        use_rolling=use_rolling)
             save_to_db(engine, pred_df)
             
         log.info(f"✅ {args.algorithm} models trained and predictions saved.")

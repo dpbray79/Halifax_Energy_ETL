@@ -88,6 +88,44 @@
   border-top: 1px solid var(--border);
 }
 
+.comparison-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.comparison-list {
+  margin-top: var(--spacing-md);
+  flex: 1;
+}
+
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.mini-table th {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.mini-table td {
+  padding: 0.5rem;
+  border-bottom: 1px dotted var(--border);
+}
+
+.mini-table tr.best-row {
+  background-color: rgba(40, 167, 69, 0.05);
+}
+
+.mini-table tr.best-row td:first-child::before {
+  content: '★ ';
+  color: var(--warning);
+}
+
 @media (max-width: 768px) {
   .metrics-grid {
     grid-template-columns: 1fr;

@@ -64,94 +64,71 @@ function PerformanceMetrics() {
     )
   }
 
+  // Group data by horizon for rendering
+  const groupedPerformance = performance.horizons.reduce((acc, current) => {
+    const h = current.forecast_horizon
+    if (!acc[h]) acc[h] = []
+    acc[h].push(current)
+    return acc
+  }, {})
+
+  if (Object.keys(groupedPerformance).length === 0) {
+    return (
+      <div className="metrics-container">
+        <p className="text-sm text-muted">No performance data available</p>
+      </div>
+    )
+  }
+
   return (
     <div className="metrics-grid">
-      {performance.horizons.map((horizon) => {
-        // Fallback targets for display
-        const rmse_target = horizon.forecast_horizon === 'H1' ? 50 : horizon.forecast_horizon === 'H2' ? 80 : 150
-        const si_target_pct = 10.0
+      {Object.entries(groupedPerformance).map(([horizon, variants]) => {
+        // Sort variants so best RMSE is first
+        const sortedVariants = [...variants].sort((a, b) => a.run_rmse - b.run_rmse)
+        const bestVariant = sortedVariants[0]
+        
+        // Fallback targets
+        const rmse_target = horizon === 'H1' ? 50 : horizon === 'H2' ? 80 : 150
 
         return (
-          <div key={horizon.forecast_horizon} className="metric-card">
+          <div key={horizon} className="comparison-card card">
             <div className="metric-header">
-              <h3>{horizon.forecast_horizon}</h3>
+              <h3>{horizon} Comparison</h3>
               <span className="text-xs text-muted">
-                {horizon.forecast_horizon === 'H1'
-                  ? '24h Forecast'
-                  : horizon.forecast_horizon === 'H2'
-                  ? '48h Forecast'
-                  : '7d Forecast'}
+                {horizon === 'H1' ? '24h' : horizon === 'H2' ? '48h' : '7d'} Horizon Performance
               </span>
             </div>
 
-            <div className="metric-stats">
-              {/* RMSE */}
-              <div className="stat-item">
-                <div className="stat-icon" style={{ backgroundColor: '#e3f2fd' }}>
-                  <TrendingUp size={20} color="#0066cc" />
-                </div>
-                <div className="stat-content">
-                  <span className="stat-label">RMSE</span>
-                  <span
-                    className="stat-value"
-                    style={{
-                      color: getPerformanceColor(
-                        horizon.run_rmse,
-                        rmse_target
-                      ),
-                    }}
-                  >
-                    {horizon.run_rmse?.toFixed(1) || 'N/A'} MW
-                  </span>
-                  <span className="stat-target text-xs text-muted">
-                    Target: &lt; {rmse_target} MW
-                  </span>
-                </div>
-              </div>
-
-              {/* SI% */}
-              <div className="stat-item">
-                <div className="stat-icon" style={{ backgroundColor: '#fff3e0' }}>
-                  <Target size={20} color="#ff8800" />
-                </div>
-                <div className="stat-content">
-                  <span className="stat-label">SI%</span>
-                  <span
-                    className="stat-value"
-                    style={{
-                      color: getPerformanceColor(
-                        horizon.run_si_pct,
-                        si_target_pct
-                      ),
-                    }}
-                  >
-                    {horizon.run_si_pct?.toFixed(1) || 'N/A'}%
-                  </span>
-                  <span className="stat-target text-xs text-muted">
-                    Target: &lt; {si_target_pct}%
-                  </span>
-                </div>
-              </div>
-
-              {/* Predictions Count */}
-              <div className="stat-item">
-                <div className="stat-icon" style={{ backgroundColor: '#e8f5e9' }}>
-                  <Activity size={20} color="#28a745" />
-                </div>
-                <div className="stat-content">
-                  <span className="stat-label">Model Version</span>
-                  <span className="stat-value" style={{ fontSize: '0.9rem' }}>
-                    {horizon.model_version || 'v1.0'}
-                  </span>
-                  <span className="stat-target text-xs text-muted">
-                    {getPerformanceStatus(horizon.run_rmse, rmse_target)}
-                  </span>
-                </div>
-              </div>
+            <div className="comparison-list">
+              <table className="mini-table">
+                <thead>
+                  <tr>
+                    <th>Config</th>
+                    <th>RMSE</th>
+                    <th>SI%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedVariants.map((variant, idx) => {
+                    const configName = `${variant.model_algorithm.replace('_', ' ')} ${variant.use_weather ? '(W)' : '(B)'}${variant.use_rolling ? '+R' : ''}`
+                    return (
+                      <tr key={idx} className={idx === 0 ? 'best-row' : ''}>
+                        <td className="text-xs font-semibold">{configName}</td>
+                        <td style={{ color: getPerformanceColor(variant.run_rmse, rmse_target) }}>
+                          {variant.run_rmse?.toFixed(1)}
+                        </td>
+                        <td className="text-xs text-muted">
+                          {variant.run_si_pct?.toFixed(1)}%
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
 
             <div className="metric-footer text-xs text-muted">
-              Last run: {new Date(horizon.model_run_at).toLocaleString()}
+              Best Run: {new Date(bestVariant.model_run_at).toLocaleString()}
             </div>
           </div>
         )

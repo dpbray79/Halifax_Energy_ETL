@@ -45,12 +45,24 @@
   font-size: 0.875rem;
 }
 
+.feature-toggles {
+  display: flex;
+  gap: var(--spacing-lg);
+  margin-top: 1rem;
+  width: 100%;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
   cursor: pointer;
-  margin-top: 1.5rem;
+}
+
+.checkbox-label.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .training-result {
