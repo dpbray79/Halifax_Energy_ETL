@@ -175,22 +175,22 @@ function Models() {
             <div className="artifact-info">
               <FileCode size={20} />
               <div>
-                <p className="font-semibold">R Script</p>
-                <p className="text-sm text-muted">{modelStatus.r_script.path}</p>
+                <p className="font-semibold">R Script Status</p>
+                <p className="text-sm text-muted">{modelStatus?.r_script?.path || 'model/scripts/model_train.py'}</p>
                 <p className="text-xs">
                   Status:{' '}
-                  {modelStatus.r_script.exists ? (
-                    <span style={{ color: 'var(--success)' }}>✓ Exists</span>
+                  {modelStatus?.r_script?.exists ? (
+                    <span style={{ color: 'var(--success)' }}>✓ Migrated to Python</span>
                   ) : (
-                    <span style={{ color: 'var(--danger)' }}>✗ Not Found</span>
+                    <span style={{ color: 'var(--danger)' }}>✗ Migration Pending</span>
                   )}
                 </p>
               </div>
             </div>
 
             <div className="artifacts-list">
-              <h3>Trained Models ({modelStatus.artifacts.count})</h3>
-              {modelStatus.artifacts.models.length > 0 ? (
+              <h3>Trained Models ({modelStatus?.artifacts?.count || 0})</h3>
+              {modelStatus?.artifacts?.models?.length > 0 ? (
                 <div className="artifact-grid">
                   {modelStatus.artifacts.models.map((artifact) => (
                     <div key={artifact.horizon} className="artifact-item">

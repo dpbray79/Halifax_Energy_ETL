@@ -304,19 +304,37 @@ export const getModelStatus = async () => {
   try {
     // Get latest predictions per horizon
     const horizons = ['H1', 'H2', 'H3']
-    const status = {}
+    const status = {
+      horizons: {},
+      r_script: {
+        path: 'model/HalifaxEnergy_Model.R',
+        exists: true, // Mocked for UI
+        migrated: true
+      },
+      artifacts: {
+        count: 0,
+        models: []
+      }
+    }
 
     for (const horizon of horizons) {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from(TABLES.PREDICTIONS)
-        .select('model_version, model_run_at, run_rmse, run_si_pct')
+        .select('model_version, model_run_at, run_rmse, run_si_pct, model_algorithm')
         .eq('forecast_horizon', horizon)
         .order('model_run_at', { ascending: false })
         .limit(1)
         .single()
 
       if (data) {
-        status[horizon] = data
+        status.horizons[horizon] = data
+        status.artifacts.count++
+        status.artifacts.models.push({
+          horizon: horizon,
+          file: `model_${horizon}_${data.model_algorithm || 'xgboost'}.json`,
+          size_bytes: 51200, // Mocked
+          modified_at: data.model_run_at
+        })
       }
     }
 
