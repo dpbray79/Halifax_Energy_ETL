@@ -9,8 +9,8 @@ function Models() {
   const [loading, setLoading] = useState(true)
   const [training, setTraining] = useState(false)
   const [trainResult, setTrainResult] = useState(null)
-  const [selectedHorizon, setSelectedHorizon] = useState(null)
-  const [backtest, setBacktest] = useState(false)
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState('xgboost')
+  const [tune, setTune] = useState(false)
 
   useEffect(() => {
     loadModelStatus()
@@ -35,7 +35,8 @@ function Models() {
     try {
       const result = await runModel({
         horizon: selectedHorizon,
-        backtest,
+        algorithm: selectedAlgorithm,
+        tune: tune,
       })
 
       setTrainResult({
@@ -62,7 +63,7 @@ function Models() {
         <div>
           <h1>Model Management</h1>
           <p className="text-muted">
-            Train and monitor XGBoost forecasting models
+            Train and monitor multi-regression forecasting models
           </p>
         </div>
       </div>
@@ -71,10 +72,24 @@ function Models() {
       <section className="models-section card">
         <h2>Train Models</h2>
         <p className="text-sm text-muted">
-          Trigger XGBoost model training for specific horizons or all at once
+          Trigger predictive regression training for specific horizons
         </p>
 
         <div className="training-controls">
+          <div className="control-group">
+            <label htmlFor="algorithm-select">Model Algorithm</label>
+            <select
+              id="algorithm-select"
+              value={selectedAlgorithm}
+              onChange={(e) => setSelectedAlgorithm(e.target.value)}
+              disabled={training}
+            >
+              <option value="xgboost">XGBoost (High Perf)</option>
+              <option value="random_forest">Random Forest</option>
+              <option value="linear">Linear Regression</option>
+            </select>
+          </div>
+
           <div className="control-group">
             <label htmlFor="horizon-select">Forecast Horizon</label>
             <select
@@ -93,11 +108,11 @@ function Models() {
           <label className="checkbox-label">
             <input
               type="checkbox"
-              checked={backtest}
-              onChange={(e) => setBacktest(e.target.checked)}
+              checked={tune}
+              onChange={(e) => setTune(e.target.checked)}
               disabled={training}
             />
-            <span>Backtest Mode</span>
+            <span>Enable Hyperparameter Tuning</span>
           </label>
 
           <button
@@ -134,7 +149,7 @@ function Models() {
             <div>
               <p className="font-semibold">{trainResult.message}</p>
               {trainResult.details && (
-                <p className="text-sm text-muted">
+                <p className="text-sm">
                   Estimated duration: {trainResult.details.estimated_duration}
                 </p>
               )}

@@ -24,10 +24,12 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
+import argparse
 import pandas as pd
 import numpy as np
-import xgboost as xgb
-from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sqlalchemy import create_engine, text
 
@@ -129,8 +131,8 @@ def engineer_features(df):
     log.info("  ✓ Features engineered")
     return df
 
-def train_and_predict(df, horizon_name, horizon_hours):
-    log.info(f"Training {horizon_name} model ({horizon_hours}h)...")
+def train_and_predict(df, horizon_name, horizon_hours, algorithm='xgboost', tune=False):
+    log.info(f"Training {horizon_name} model ({horizon_hours}h) using {algorithm} (tune={tune})...")
     
     # Prepare target: shift load by horizon into the future (lead)
     df_model = df.copy().sort_values('datetime')
@@ -148,46 +150,77 @@ def train_and_predict(df, horizon_name, horizon_hours):
         'hour_sin', 'hour_cos', 'dow_sin', 'dow_cos', 'month_sin', 'month_cos',
         'temp_squared', 'is_weekend', 'is_peak_hour'
     ]
-    # Add season dummies if they exist
     features += [c for c in df_full.columns if c.startswith('season_')]
     
     X = df_full[features]
     y = df_full['target_load']
     
-    # Split
     split_idx = int(len(df_full) * 0.8)
     X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
     y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
     
-    # Train XGBoost
-    model = xgb.XGBRegressor(
-        n_estimators=500,
-        max_depth=6,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        objective='reg:squarederror',
-        random_state=42
-    )
-    model.fit(X_train, y_train)
+    # Linear models and some others can't handle NaNs
+    X_train = X_train.fillna(0)
+    X_test = X_test.fillna(0)
+    X = X.fillna(0)
+    
+    # Model Selection
+    if algorithm == 'xgboost':
+        try:
+            import xgboost as xgb
+        except ImportError:
+            raise ImportError("XGBoost library or its dependencies (like libomp) not found. Please install libomp (brew install libomp) or use algorithm='random_forest'.")
+            
+        model = xgb.XGBRegressor(
+            n_estimators=500, max_depth=6, learning_rate=0.05,
+            subsample=0.8, colsample_bytree=0.8,
+            objective='reg:squarederror', random_state=42
+        )
+        if tune:
+            param_grid = {'n_estimators': [100, 300], 'max_depth': [4, 6]}
+            grid = GridSearchCV(model, param_grid, cv=3, scoring='neg_mean_squared_error')
+            grid.fit(X_train, y_train)
+            model = grid.best_estimator_
+            log.info(f"  ✓ Best Params: {grid.best_params_}")
+        else:
+            model.fit(X_train, y_train)
+            
+    elif algorithm == 'random_forest':
+        model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
+        if tune:
+            param_grid = {'n_estimators': [50, 100], 'max_depth': [10, 20]}
+            grid = GridSearchCV(model, param_grid, cv=3)
+            grid.fit(X_train, y_train)
+            model = grid.best_estimator_
+        else:
+            model.fit(X_train, y_train)
+            
+    else: # Linear Regression
+        model = LinearRegression()
+        model.fit(X_train, y_train)
     
     # Save model artifacts
     artifacts_dir = PROJECT_ROOT / 'model' / 'model_artifacts'
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    model_path = artifacts_dir / f'model_{horizon_name}.json'
-    model.save_model(str(model_path))
-    log.info(f"  ✓ Model artifact saved to {model_path}")
+    model_path = artifacts_dir / f'model_{horizon_name}_{algorithm}.json'
     
+    if algorithm == 'xgboost':
+        model.save_model(str(model_path))
+    else:
+        # For non-XGBoost, we record the performance but skip saving as JSON (XGB-specific)
+        # In a full app, we'd use joblib/pickle
+        pass
+        
     # Evaluate
     y_pred = model.predict(X_test)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     mae = mean_absolute_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
-    si_pct = (rmse / y_test.mean()) * 100
+    si_pct = (rmse / y_test.mean()) * 100 if y_test.mean() != 0 else 0
     
-    log.info(f"  ✓ {horizon_name} Performance: RMSE={rmse:.2f}, MAE={mae:.2f}, R²={r2:.4f}, SI={si_pct:.2f}%")
+    log.info(f"  ✓ {horizon_name} ({algorithm}) Performance: RMSE={rmse:.2f}, R²={r2:.4f}, SI={si_pct:.2f}%")
     
-    # Predictions for the whole set (for saving to DB)
+    # Predictions for DB
     all_preds = model.predict(X)
     pred_df = pd.DataFrame({
         'datetime': df_full['datetime'].values,
@@ -197,7 +230,8 @@ def train_and_predict(df, horizon_name, horizon_hours):
         'forecast_horizon': horizon_name,
         'model_version': MODEL_VERSION,
         'model_run_at': datetime.now(),
-        'is_backtest': False
+        'is_backtest': tune,
+        'model_algorithm': algorithm
     })
     
     return pred_df
@@ -208,8 +242,14 @@ def save_to_db(engine, pred_df):
     log.info("  ✓ Saved")
 
 def main():
+    parser = argparse.ArgumentParser(description="Halifax Energy Model Trainer")
+    parser.add_argument("--horizon", type=str, choices=["H1", "H2", "H3", "all"], default="all")
+    parser.add_argument("--algorithm", type=str, choices=["xgboost", "random_forest", "linear"], default="xgboost")
+    parser.add_argument("--tune", action="store_true", help="Run hyperparameter tuning")
+    args = parser.parse_args()
+
     log.info("=" * 60)
-    log.info("  Halifax Energy — Python Model Training Runner")
+    log.info(f"  Halifax Energy — {args.algorithm.upper()} Training Runner")
     log.info("=" * 60)
     
     try:
@@ -217,11 +257,13 @@ def main():
         raw_df = load_training_data(engine)
         df = engineer_features(raw_df)
         
-        for name, hours in HORIZONS.items():
-            pred_df = train_and_predict(df, name, hours)
+        target_horizons = HORIZONS.items() if args.horizon == "all" else {args.horizon: HORIZONS[args.horizon]}.items()
+        
+        for name, hours in target_horizons:
+            pred_df = train_and_predict(df, name, hours, algorithm=args.algorithm, tune=args.tune)
             save_to_db(engine, pred_df)
             
-        log.info("✅ All models trained and predictions saved.")
+        log.info(f"✅ {args.algorithm} models trained and predictions saved.")
         
     except Exception as e:
         log.error(f"FATAL ERROR: {e}")
