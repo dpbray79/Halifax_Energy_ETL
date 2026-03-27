@@ -248,14 +248,19 @@ export const getZones = async ({ horizon = 'H1', timestamp } = {}) => {
     const actual = await getLatestActual()
 
     // Enrich each zone with prediction/actual data
-    // (In a real implementation, you'd have zone-specific predictions)
+    const predicted_load_mw = prediction?.predicted_load_mw || 0
+    const actual_load_mw = actual?.load_mw || 0
+    const residual_mw = predicted_load_mw - actual_load_mw
+
     geojson.features = geojson.features.map(feature => ({
       ...feature,
       properties: {
         ...feature.properties,
-        predicted_load_mw: prediction?.predicted_load_mw || 0,
-        actual_load_mw: actual?.load_mw || 0,
-        horizon: horizon
+        predicted_load_mw,
+        actual_load_mw,
+        residual_mw,
+        horizon: horizon,
+        timestamp: actual?.datetime || new Date().toISOString()
       }
     }))
 

@@ -91,12 +91,12 @@ function MapView({ horizon = 'H1', showResiduals = false }) {
           ${props.actual_load_mw ? `
             <div class="data-row">
               <span class="label">Actual Load:</span>
-              <span class="value">${props.actual_load_mw.toFixed(1)} MW</span>
+              <span class="value">${props.actual_load_mw?.toFixed(1) || '0.0'} MW</span>
             </div>
             <div class="data-row">
               <span class="label">Residual:</span>
               <span class="value ${props.residual_mw > 0 ? 'positive' : 'negative'}">
-                ${props.residual_mw > 0 ? '+' : ''}${props.residual_mw.toFixed(1)} MW
+                ${props.residual_mw > 0 ? '+' : ''}${(props.residual_mw || 0).toFixed(1)} MW
               </span>
             </div>
           ` : ''}

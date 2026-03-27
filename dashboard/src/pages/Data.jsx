@@ -166,7 +166,7 @@ function Data() {
                   <td className="timestamp-cell">
                     {new Date(row.datetime).toLocaleString()}
                   </td>
-                  <td className="load-cell">{row.load_mw.toFixed(1)}</td>
+                  <td className="load-cell">{row.load_mw?.toFixed(1) || '0.0'}</td>
                   <td className="source-cell text-xs text-muted">
                     {row.source}
                   </td>

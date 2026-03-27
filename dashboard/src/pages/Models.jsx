@@ -181,7 +181,7 @@ function Models() {
                       <div className="artifact-header">
                         <span className="artifact-horizon">{artifact.horizon}</span>
                         <span className="artifact-size text-xs text-muted">
-                          {(artifact.size_bytes / 1024).toFixed(1)} KB
+                          {(artifact.size_bytes / 1024)?.toFixed(1) || '0.0'} KB
                         </span>
                       </div>
                       <p className="artifact-file text-sm">{artifact.file}</p>
